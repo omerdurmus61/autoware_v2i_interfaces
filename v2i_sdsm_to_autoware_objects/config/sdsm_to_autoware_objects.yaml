@@ -14,7 +14,7 @@ sdsm_to_autoware_objects:
 
     vehicle_length_scale: 0.01
     vehicle_width_scale: 0.01
-    vru_radius_scale: 0.01
+    vru_radius_scale: 0.05
 
     default_vehicle_height: 1.6
     default_pedestrian_height: 1.8
@@ -28,5 +28,5 @@ sdsm_to_autoware_objects:
     pedestrian_existence_probability: 0.95
     unknown_existence_probability: 0.50
 
-    use_heading: false
+    use_heading: true
     heading_scale_rad: 0.0125
