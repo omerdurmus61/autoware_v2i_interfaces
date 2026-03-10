@@ -19,7 +19,7 @@ def generate_launch_description():
 
     spat_node = Node(
         package="v2i_spat_bridge",
-        executable="spat_udp_bridge",
+        executable="spat_udp_bridge.py",
         name="spat_udp_bridge",
         output="screen",
         parameters=[config_file],
