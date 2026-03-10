@@ -18,7 +18,7 @@ class MapUdpBridge(Node):
         super().__init__("map_udp_bridge")
 
         self.declare_parameter("bind_ip", "0.0.0.0")
-        self.declare_parameter("udp_port", 7112)
+        self.declare_parameter("udp_port", 7113)
         self.declare_parameter("recv_buf", 4096)
         self.declare_parameter("filter_hex_prefix", "0012")
         self.declare_parameter("topic", "/map")
