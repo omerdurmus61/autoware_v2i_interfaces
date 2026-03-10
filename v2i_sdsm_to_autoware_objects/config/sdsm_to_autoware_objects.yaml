@@ -29,4 +29,5 @@ sdsm_to_autoware_objects:
     unknown_existence_probability: 0.50
 
     use_heading: false
+    default_heading: 45
     heading_scale_rad: 0.0125

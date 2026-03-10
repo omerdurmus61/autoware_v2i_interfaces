@@ -58,6 +58,7 @@ class SdsmToAutowareObjects(Node):
 
         # Heading usage
         self.declare_parameter("use_heading", False)
+        self.declare_parameter("default_heading", 45)
         self.declare_parameter("heading_scale_rad", 0.0125)
 
         input_topic = str(self.get_parameter("input_topic").value)
@@ -97,6 +98,7 @@ class SdsmToAutowareObjects(Node):
         )
 
         self.use_heading = bool(self.get_parameter("use_heading").value)
+        self.default_heading = float(self.get_parameter("default_heading").value)
         self.heading_scale_rad = float(self.get_parameter("heading_scale_rad").value)
 
         # QoS (broadcast-like)
@@ -217,11 +219,12 @@ class SdsmToAutowareObjects(Node):
         kinematics = detected.kinematics
 
         if not self.use_heading:
-            kinematics.orientation_availability = DetectedObjectKinematics.UNAVAILABLE
+            yaw = math.radians(self.default_heading)
+
             kinematics.pose_with_covariance.pose.orientation.x = 0.0
             kinematics.pose_with_covariance.pose.orientation.y = 0.0
-            kinematics.pose_with_covariance.pose.orientation.z = 0.0
-            kinematics.pose_with_covariance.pose.orientation.w = 1.0
+            kinematics.pose_with_covariance.pose.orientation.z = math.sin(yaw / 2.0)
+            kinematics.pose_with_covariance.pose.orientation.w = math.cos(yaw / 2.0)
             return
 
         if obj.heading == 0:
