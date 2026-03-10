@@ -8,6 +8,7 @@ from rclpy.node import Node
 from std_msgs.msg import Header
 from geometry_msgs.msg import Point
 from visualization_msgs.msg import Marker, MarkerArray
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 from v2i_map_msgs.msg import MapData, MapIntersection, MapLane
 
@@ -102,11 +103,19 @@ class MapToRvizMarkers(Node):
         self.arrow_rgba = self._read_rgba_param("arrow_rgba")
         self.signal_group_rgba = self._read_rgba_param("signal_group_rgba")
 
+
+        qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+        )
+
         self.sub = self.create_subscription(
             MapData,
             input_topic,
             self.map_callback,
-            10,
+            qos,
         )
 
         self.pub = self.create_publisher(
