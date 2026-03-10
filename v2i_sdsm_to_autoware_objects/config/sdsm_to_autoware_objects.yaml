@@ -1,0 +1,32 @@
+sdsm_to_autoware_objects:
+  ros__parameters:
+    input_topic: "/v2i/sdsm/raw"
+    output_topic: "/v2i/sdsm/objects"
+    frame_id: "v2i_intersection_14867"
+
+    position_scale_x: 0.1
+    position_scale_y: 0.1
+    position_offset_x: 0.0
+    position_offset_y: 0.0
+    swap_xy: false
+    invert_x: false
+    invert_y: false
+
+    vehicle_length_scale: 0.01
+    vehicle_width_scale: 0.01
+    vru_radius_scale: 0.01
+
+    default_vehicle_height: 1.6
+    default_pedestrian_height: 1.8
+    default_unknown_height: 1.5
+
+    vehicle_box_z_center_offset: 0.8
+    pedestrian_cylinder_z_center_offset: 0.9
+    unknown_z_center_offset: 0.75
+
+    vehicle_existence_probability: 0.95
+    pedestrian_existence_probability: 0.95
+    unknown_existence_probability: 0.50
+
+    use_heading: false
+    heading_scale_rad: 0.0125

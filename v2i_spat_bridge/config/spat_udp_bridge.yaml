@@ -1,0 +1,8 @@
+spat_udp_bridge:
+  ros__parameters:
+    bind_ip: "0.0.0.0"
+    udp_port: 7114 # UDP_PORT = 7114 for SPaT msgs
+    recv_buf: 2048
+    filter_hex_prefix: "0013" # To filter for SPaT use 0013
+    topic: "/v2i/spat/raw"
+    log_every_n: 1

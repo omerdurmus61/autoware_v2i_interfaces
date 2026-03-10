@@ -1,0 +1,4 @@
+std_msgs/Header header
+uint8 message_id
+uint8 msg_issue_revision
+v2i_map_msgs/MapIntersection[] intersections

@@ -1,0 +1,8 @@
+map_udp_bridge:
+  ros__parameters:
+    bind_ip: "0.0.0.0"
+    udp_port: 7112
+    recv_buf: 4096
+    filter_hex_prefix: "0012"
+    topic: "/v2i/map/raw"
+    log_every_n: 10

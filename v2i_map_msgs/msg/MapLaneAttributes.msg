@@ -1,0 +1,9 @@
+uint8 directional_use_value
+uint8 directional_use_bits
+
+uint8 shared_with_value
+uint8 shared_with_bits
+
+string lane_type
+uint8 lane_type_value
+uint8 lane_type_bits

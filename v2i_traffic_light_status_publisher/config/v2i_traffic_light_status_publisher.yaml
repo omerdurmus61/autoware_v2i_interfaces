@@ -1,0 +1,4 @@
+v2i_traffic_light_status_publisher:
+  ros__parameters:
+    input_topic: "/v2i/spat/raw"
+    output_topic: "/perception/traffic_light_recognition/traffic_signals"

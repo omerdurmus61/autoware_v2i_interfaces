@@ -1,0 +1,2 @@
+uint16 connecting_lane
+uint16 signal_group

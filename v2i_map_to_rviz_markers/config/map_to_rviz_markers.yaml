@@ -1,0 +1,43 @@
+map_to_rviz_markers:
+  ros__parameters:
+    input_topic: "/v2i/map/raw"
+    output_topic: "/v2i/map/lane_markers"
+    frame_namespace: "v2i_intersection_"
+
+    publish_all_intersections: true
+    target_intersection_id: 14867
+
+    node_scale_x: 0.01
+    node_scale_y: 0.01
+    node_offset_x: 0.0
+    node_offset_y: 0.0
+    swap_xy: false
+    invert_x: false
+    invert_y: false
+
+    line_z: 0.05
+    line_width: 0.15
+
+    publish_lane_ids: true
+    lane_id_z: 0.5
+    lane_id_scale: 1.0
+
+    publish_connections: true
+    connection_z: 0.1
+    connection_width: 0.08
+
+    publish_direction_arrows: true
+    arrow_z: 0.12
+    arrow_scale_x: 0.8
+    arrow_scale_y: 0.2
+    arrow_scale_z: 0.2
+
+    publish_signal_group_labels: true
+    signal_group_z: 0.35
+    signal_group_scale: 0.7
+
+    lane_rgba: [0.0, 1.0, 0.0, 1.0]
+    connection_rgba: [1.0, 0.6, 0.0, 1.0]
+    lane_id_rgba: [1.0, 1.0, 1.0, 1.0]
+    arrow_rgba: [0.0, 0.8, 1.0, 1.0]
+    signal_group_rgba: [1.0, 0.2, 0.2, 1.0]
