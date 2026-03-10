@@ -6,3 +6,4 @@ sdsm_udp_bridge:
     filter_hex_prefix: "0029"
     topic: "/v2i/sdsm/raw"
     log_every_n: 10
+    frame_id: ""

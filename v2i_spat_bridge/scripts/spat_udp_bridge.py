@@ -48,10 +48,10 @@ class SpatUdpBridge(Node):
 
         # Parameters
         self.declare_parameter("bind_ip", "0.0.0.0")
-        self.declare_parameter("udp_port", 7111)
+        self.declare_parameter("udp_port", 7114)
         self.declare_parameter("recv_buf", 2048)
         self.declare_parameter("filter_hex_prefix", "0013")  # SPaT filter (first 2 bytes)
-        self.declare_parameter("topic", "/spat")
+        self.declare_parameter("topic", "/v2i/spat/raw")
         self.declare_parameter("log_every_n", 1)  # log every N decoded messages (0 disables)
 
         bind_ip = self.get_parameter("bind_ip").value

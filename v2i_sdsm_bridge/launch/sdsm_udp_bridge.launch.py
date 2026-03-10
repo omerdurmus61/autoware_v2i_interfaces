@@ -19,7 +19,7 @@ def generate_launch_description():
 
     sdsm_node = Node(
         package="v2i_sdsm_bridge",
-        executable="sdsm_udp_bridge",
+        executable="sdsm_udp_bridge.py",
         name="sdsm_udp_bridge",
         output="screen",
         parameters=[config_file],
