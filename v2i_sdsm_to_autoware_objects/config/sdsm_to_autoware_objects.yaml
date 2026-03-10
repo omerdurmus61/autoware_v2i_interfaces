@@ -28,5 +28,5 @@ sdsm_to_autoware_objects:
     pedestrian_existence_probability: 0.95
     unknown_existence_probability: 0.50
 
-    use_heading: true
+    use_heading: false
     heading_scale_rad: 0.0125
