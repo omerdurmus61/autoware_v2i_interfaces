@@ -4,13 +4,13 @@ from typing import Dict, List, Optional, Tuple
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 from std_msgs.msg import Header
 from geometry_msgs.msg import Point
 from visualization_msgs.msg import Marker, MarkerArray
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
-from v2i_map_msgs.msg import MapData, MapIntersection, MapLane
+from v2i_map_msgs.msg import MapData, MapIntersection, MapLane, MapNode
 
 
 class MapToRvizMarkers(Node):
@@ -21,13 +21,12 @@ class MapToRvizMarkers(Node):
         self.declare_parameter("output_topic", "/v2i/map/lane_markers")
         self.declare_parameter("frame_namespace", "v2i_intersection_")
 
-        # If true, publish all intersections found in the message.
-        # If false, only publish target_intersection_id.
         self.declare_parameter("publish_all_intersections", True)
         self.declare_parameter("target_intersection_id", 14867)
 
-        self.declare_parameter("node_scale_x", 0.01)
-        self.declare_parameter("node_scale_y", 0.01)
+        # Additional global scaling if needed after node-type scaling
+        self.declare_parameter("node_scale_x", 1.0)
+        self.declare_parameter("node_scale_y", 1.0)
         self.declare_parameter("node_offset_x", 0.0)
         self.declare_parameter("node_offset_y", 0.0)
         self.declare_parameter("swap_xy", False)
@@ -60,6 +59,8 @@ class MapToRvizMarkers(Node):
         self.declare_parameter("lane_id_rgba", [1.0, 1.0, 1.0, 1.0])
         self.declare_parameter("arrow_rgba", [0.0, 0.8, 1.0, 1.0])
         self.declare_parameter("signal_group_rgba", [1.0, 0.2, 0.2, 1.0])
+
+        self.declare_parameter("debug_log_lanes", False)
 
         input_topic = str(self.get_parameter("input_topic").value)
         output_topic = str(self.get_parameter("output_topic").value)
@@ -97,11 +98,13 @@ class MapToRvizMarkers(Node):
         self.signal_group_z = float(self.get_parameter("signal_group_z").value)
         self.signal_group_scale = float(self.get_parameter("signal_group_scale").value)
 
-        self.lane_rgba = self._read_rgba_param("lane_rgba")
-        self.connection_rgba = self._read_rgba_param("connection_rgba")
-        self.lane_id_rgba = self._read_rgba_param("lane_id_rgba")
-        self.arrow_rgba = self._read_rgba_param("arrow_rgba")
-        self.signal_group_rgba = self._read_rgba_param("signal_group_rgba")
+        self.lane_rgba = tuple(float(v) for v in self.get_parameter("lane_rgba").value)
+        self.connection_rgba = tuple(float(v) for v in self.get_parameter("connection_rgba").value)
+        self.lane_id_rgba = tuple(float(v) for v in self.get_parameter("lane_id_rgba").value)
+        self.arrow_rgba = tuple(float(v) for v in self.get_parameter("arrow_rgba").value)
+        self.signal_group_rgba = tuple(float(v) for v in self.get_parameter("signal_group_rgba").value)
+
+        self.debug_log_lanes = bool(self.get_parameter("debug_log_lanes").value)
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
@@ -110,35 +113,11 @@ class MapToRvizMarkers(Node):
             depth=1,
         )
 
-        self.sub = self.create_subscription(
-            MapData,
-            input_topic,
-            self.map_callback,
-            qos,
-        )
+        self.sub = self.create_subscription(MapData, input_topic, self.map_callback, qos)
+        self.pub = self.create_publisher(MarkerArray, output_topic, qos)
 
-        self.pub = self.create_publisher(
-            MarkerArray,
-            output_topic,
-            10,
-        )
-
-        self.get_logger().info(f"Subscribed to: {input_topic}")
-        self.get_logger().info(f"Publishing MarkerArray on: {output_topic}")
-        self.get_logger().info(f"Frame namespace: {self.frame_namespace}")
-        self.get_logger().info(f"Publish all intersections: {self.publish_all_intersections}")
-        if not self.publish_all_intersections:
-            self.get_logger().info(f"Target intersection_id: {self.target_intersection_id}")
-
-    def _read_rgba_param(self, name: str) -> Tuple[float, float, float, float]:
-        values = self.get_parameter(name).value
-        if not isinstance(values, list) or len(values) != 4:
-            self.get_logger().warn(f"Parameter '{name}' must be a list of 4 floats. Using fallback.")
-            return 1.0, 1.0, 1.0, 1.0
-        return float(values[0]), float(values[1]), float(values[2]), float(values[3])
-
-    def _frame_id_for_intersection(self, intersection_id: int) -> str:
-        return f"{self.frame_namespace}{intersection_id}"
+        self.get_logger().info(f"Subscribed to MAP topic: {input_topic}")
+        self.get_logger().info(f"Publishing MarkerArray to: {output_topic}")
 
     def _make_header(self, stamp, frame_id: str) -> Header:
         header = Header()
@@ -146,55 +125,116 @@ class MapToRvizMarkers(Node):
         header.frame_id = frame_id
         return header
 
-    def _convert_xy(self, raw_x: int, raw_y: int) -> Tuple[float, float]:
-        x = raw_x * self.node_scale_x + self.node_offset_x
-        y = raw_y * self.node_scale_y + self.node_offset_y
-
-        if self.swap_xy:
-            x, y = y, x
-        if self.invert_x:
-            x = -x
-        if self.invert_y:
-            y = -y
-
-        return x, y
+    def _frame_id_for_intersection(self, intersection_id: int) -> str:
+        return f"{self.frame_namespace}{intersection_id}"
 
     def _selected_intersections(self, msg: MapData) -> List[MapIntersection]:
         if self.publish_all_intersections:
             return list(msg.intersections)
 
-        selected: List[MapIntersection] = []
-        for intersection in msg.intersections:
-            if intersection.id.id == self.target_intersection_id:
-                selected.append(intersection)
-                break
-        return selected
+        return [
+            intersection
+            for intersection in msg.intersections
+            if int(intersection.id.id) == self.target_intersection_id
+        ]
 
-    def _lane_points(self, lane: MapLane, z_value: float) -> List[Point]:
+    def _node_type_scale(self, node_type: str) -> float:
+        scales = {
+            "node-XY1": 0.01,
+            "node-XY2": 0.1,
+            "node-XY3": 1.0,
+            "node-XY4": 10.0,
+            "node-XY5": 0.1,
+            "node-XY6": 0.01,
+            "computed": 1.0,
+        }
+        return scales.get(node_type, 1.0)
+
+    def _transform_xy(self, x: float, y: float) -> Tuple[float, float]:
+        if self.swap_xy:
+            x, y = y, x
+
+        if self.invert_x:
+            x = -x
+
+        if self.invert_y:
+            y = -y
+
+        x = x * self.node_scale_x + self.node_offset_x
+        y = y * self.node_scale_y + self.node_offset_y
+        return x, y
+
+    def _lane_points(
+        self,
+        intersection: MapIntersection,
+        lane: MapLane,
+        z_value: float,
+    ) -> List[Point]:
         points: List[Point] = []
+
+        # RViz tarafında lokal intersection frame kullanıyoruz.
+        # ref_point absolute anchor; lane nodes ise delta.
+        # Bu yüzden kümülatif delta ile lane polyline oluşturuyoruz.
+        current_x = 0.0
+        current_y = 0.0
+
+        # İlk anchor noktası
+        start_x, start_y = self._transform_xy(0.0, 0.0)
+        start_pt = Point()
+        start_pt.x = start_x
+        start_pt.y = start_y
+        start_pt.z = z_value
+        points.append(start_pt)
+
         for node in lane.nodes:
-            x, y = self._convert_xy(node.x, node.y)
-            p = Point()
-            p.x = x
-            p.y = y
-            p.z = z_value
-            points.append(p)
+            node_type = str(node.node_type)
+            scale = self._node_type_scale(node_type)
+
+            dx = float(node.x) * scale
+            dy = float(node.y) * scale
+
+            current_x += dx
+            current_y += dy
+
+            px, py = self._transform_xy(current_x, current_y)
+
+            pt = Point()
+            pt.x = px
+            pt.y = py
+            pt.z = z_value
+            points.append(pt)
+
+        # Tek nokta varsa marker sorun çıkarabilir; yine de en az 2 nokta verelim
+        if len(points) == 1:
+            duplicate = Point()
+            duplicate.x = points[0].x
+            duplicate.y = points[0].y
+            duplicate.z = points[0].z
+            points.append(duplicate)
+
+        if self.debug_log_lanes:
+            self.get_logger().info(
+                f"lane_id={int(lane.lane_id)} points={[(round(p.x, 3), round(p.y, 3)) for p in points]}"
+            )
+
         return points
 
-    def _lane_midpoint(self, lane: MapLane, z_value: float) -> Point:
-        points = self._lane_points(lane, z_value)
-        midpoint = Point()
-
+    def _lane_midpoint(
+        self,
+        intersection: MapIntersection,
+        lane: MapLane,
+        z_value: float,
+    ) -> Point:
+        points = self._lane_points(intersection, lane, z_value)
         if not points:
-            midpoint.x = 0.0
-            midpoint.y = 0.0
-            midpoint.z = z_value
-            return midpoint
-
+            pt = Point()
+            pt.z = z_value
+            return pt
         return points[len(points) // 2]
 
     def _make_lane_line_marker(
         self,
+        intersection: MapIntersection,
         lane: MapLane,
         stamp,
         marker_id: int,
@@ -215,12 +255,13 @@ class MapToRvizMarkers(Node):
         marker.color.b = b
         marker.color.a = a
 
-        marker.points = self._lane_points(lane, self.line_z)
+        marker.points = self._lane_points(intersection, lane, self.line_z)
         marker.pose.orientation.w = 1.0
         return marker
 
     def _make_lane_text_marker(
         self,
+        intersection: MapIntersection,
         lane: MapLane,
         stamp,
         marker_id: int,
@@ -233,7 +274,7 @@ class MapToRvizMarkers(Node):
         marker.id = marker_id
         marker.type = Marker.TEXT_VIEW_FACING
         marker.action = Marker.ADD
-        marker.pose.position = self._lane_midpoint(lane, self.lane_id_z)
+        marker.pose.position = self._lane_midpoint(intersection, lane, self.lane_id_z)
         marker.pose.orientation.w = 1.0
         marker.scale.z = self.lane_id_scale
 
@@ -248,13 +289,14 @@ class MapToRvizMarkers(Node):
 
     def _make_arrow_marker(
         self,
+        intersection: MapIntersection,
         lane: MapLane,
         stamp,
         marker_id: int,
         frame_id: str,
         namespace_suffix: str,
     ) -> Optional[Marker]:
-        points = self._lane_points(lane, self.arrow_z)
+        points = self._lane_points(intersection, lane, self.arrow_z)
         if len(points) < 2:
             return None
 
@@ -281,6 +323,7 @@ class MapToRvizMarkers(Node):
 
     def _make_connection_marker(
         self,
+        intersection: MapIntersection,
         from_lane: MapLane,
         to_lane: MapLane,
         stamp,
@@ -288,8 +331,8 @@ class MapToRvizMarkers(Node):
         frame_id: str,
         namespace_suffix: str,
     ) -> Optional[Marker]:
-        from_points = self._lane_points(from_lane, self.connection_z)
-        to_points = self._lane_points(to_lane, self.connection_z)
+        from_points = self._lane_points(intersection, from_lane, self.connection_z)
+        to_points = self._lane_points(intersection, to_lane, self.connection_z)
 
         if not from_points or not to_points:
             return None
@@ -314,6 +357,7 @@ class MapToRvizMarkers(Node):
 
     def _make_signal_group_text_marker(
         self,
+        intersection: MapIntersection,
         from_lane: MapLane,
         to_lane: MapLane,
         signal_group: int,
@@ -322,8 +366,8 @@ class MapToRvizMarkers(Node):
         frame_id: str,
         namespace_suffix: str,
     ) -> Optional[Marker]:
-        from_points = self._lane_points(from_lane, self.signal_group_z)
-        to_points = self._lane_points(to_lane, self.signal_group_z)
+        from_points = self._lane_points(intersection, from_lane, self.signal_group_z)
+        to_points = self._lane_points(intersection, to_lane, self.signal_group_z)
 
         if not from_points or not to_points:
             return None
@@ -342,7 +386,6 @@ class MapToRvizMarkers(Node):
         marker.pose.position.y = 0.5 * (start_pt.y + end_pt.y)
         marker.pose.position.z = self.signal_group_z
         marker.pose.orientation.w = 1.0
-
         marker.scale.z = self.signal_group_scale
 
         r, g, b, a = self.signal_group_rgba
@@ -381,6 +424,7 @@ class MapToRvizMarkers(Node):
             for lane in intersection.lane_set:
                 marker_array.markers.append(
                     self._make_lane_line_marker(
+                        intersection=intersection,
                         lane=lane,
                         stamp=stamp,
                         marker_id=marker_id,
@@ -393,6 +437,7 @@ class MapToRvizMarkers(Node):
                 if self.publish_lane_ids:
                     marker_array.markers.append(
                         self._make_lane_text_marker(
+                            intersection=intersection,
                             lane=lane,
                             stamp=stamp,
                             marker_id=marker_id,
@@ -404,6 +449,7 @@ class MapToRvizMarkers(Node):
 
                 if self.publish_direction_arrows:
                     arrow_marker = self._make_arrow_marker(
+                        intersection=intersection,
                         lane=lane,
                         stamp=stamp,
                         marker_id=marker_id,
@@ -423,6 +469,7 @@ class MapToRvizMarkers(Node):
 
                         if self.publish_connections:
                             conn_marker = self._make_connection_marker(
+                                intersection=intersection,
                                 from_lane=lane,
                                 to_lane=to_lane,
                                 stamp=stamp,
@@ -436,6 +483,7 @@ class MapToRvizMarkers(Node):
 
                         if self.publish_signal_group_labels:
                             sg_marker = self._make_signal_group_text_marker(
+                                intersection=intersection,
                                 from_lane=lane,
                                 to_lane=to_lane,
                                 signal_group=int(connection.signal_group),
