@@ -32,10 +32,10 @@ class MapUdpBridge(Node):
         self.log_every_n = int(self.get_parameter("log_every_n").value)
 
         qos = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.VOLATILE,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
             history=HistoryPolicy.KEEP_LAST,
-            depth=10,
+            depth=1,
         )
 
         self.pub = self.create_publisher(MapData, topic, qos)
