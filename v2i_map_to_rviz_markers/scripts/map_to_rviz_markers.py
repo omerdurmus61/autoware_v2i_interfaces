@@ -103,12 +103,11 @@ class MapToRvizMarkers(Node):
         self.arrow_rgba = self._read_rgba_param("arrow_rgba")
         self.signal_group_rgba = self._read_rgba_param("signal_group_rgba")
 
-
         qos = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.VOLATILE,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
             history=HistoryPolicy.KEEP_LAST,
-            depth=10,
+            depth=1,
         )
 
         self.sub = self.create_subscription(
