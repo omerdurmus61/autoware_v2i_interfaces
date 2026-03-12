@@ -35,14 +35,14 @@ class V2ITrafficLightStatusPublisher(Node):
 
         self.spat_sub = self.create_subscription(
             SpatPacket,
-            '/v2i/spat/raw',
+            input_topic,
             self.spat_callback,
             qos
         )
 
         self.traffic_light_pub = self.create_publisher(
             TrafficLightGroupArray,
-            '/perception/traffic_light_recognition/traffic_signals',
+            output_topic,
             10
         )
 
