@@ -172,13 +172,9 @@ class MapToRvizMarkers(Node):
     ) -> List[Point]:
         points: List[Point] = []
 
-        # RViz tarafında lokal intersection frame kullanıyoruz.
-        # ref_point absolute anchor; lane nodes ise delta.
-        # Bu yüzden kümülatif delta ile lane polyline oluşturuyoruz.
         current_x = 0.0
         current_y = 0.0
 
-        # İlk anchor noktası
         start_x, start_y = self._transform_xy(0.0, 0.0)
         start_pt = Point()
         start_pt.x = start_x
@@ -204,7 +200,6 @@ class MapToRvizMarkers(Node):
             pt.z = z_value
             points.append(pt)
 
-        # Tek nokta varsa marker sorun çıkarabilir; yine de en az 2 nokta verelim
         if len(points) == 1:
             duplicate = Point()
             duplicate.x = points[0].x
