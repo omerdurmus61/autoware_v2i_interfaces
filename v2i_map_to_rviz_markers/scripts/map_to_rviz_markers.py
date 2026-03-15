@@ -54,11 +54,16 @@ class MapToRvizMarkers(Node):
         self.declare_parameter("signal_group_z", 0.35)
         self.declare_parameter("signal_group_scale", 0.7)
 
+        self.declare_parameter("publish_intersection_names", True)
+        self.declare_parameter("intersection_name_z", 1.5)
+        self.declare_parameter("intersection_name_scale", 1.2)
+
         self.declare_parameter("lane_rgba", [0.0, 1.0, 0.0, 1.0])
         self.declare_parameter("connection_rgba", [1.0, 0.6, 0.0, 1.0])
         self.declare_parameter("lane_id_rgba", [1.0, 1.0, 1.0, 1.0])
         self.declare_parameter("arrow_rgba", [0.0, 0.8, 1.0, 1.0])
         self.declare_parameter("signal_group_rgba", [1.0, 0.2, 0.2, 1.0])
+        self.declare_parameter("intersection_name_rgba", [1.0, 1.0, 0.0, 1.0])
 
         self.declare_parameter("debug_log_lanes", False)
 
@@ -98,11 +103,18 @@ class MapToRvizMarkers(Node):
         self.signal_group_z = float(self.get_parameter("signal_group_z").value)
         self.signal_group_scale = float(self.get_parameter("signal_group_scale").value)
 
+        self.publish_intersection_names = bool(self.get_parameter("publish_intersection_names").value)
+        self.intersection_name_z = float(self.get_parameter("intersection_name_z").value)
+        self.intersection_name_scale = float(self.get_parameter("intersection_name_scale").value)
+
         self.lane_rgba = tuple(float(v) for v in self.get_parameter("lane_rgba").value)
         self.connection_rgba = tuple(float(v) for v in self.get_parameter("connection_rgba").value)
         self.lane_id_rgba = tuple(float(v) for v in self.get_parameter("lane_id_rgba").value)
         self.arrow_rgba = tuple(float(v) for v in self.get_parameter("arrow_rgba").value)
         self.signal_group_rgba = tuple(float(v) for v in self.get_parameter("signal_group_rgba").value)
+        self.intersection_name_rgba = tuple(
+            float(v) for v in self.get_parameter("intersection_name_rgba").value
+        )
 
         self.debug_log_lanes = bool(self.get_parameter("debug_log_lanes").value)
 
@@ -392,6 +404,37 @@ class MapToRvizMarkers(Node):
         marker.text = f"SG:{signal_group}"
         return marker
 
+    def _make_intersection_name_marker(
+        self,
+        intersection: MapIntersection,
+        stamp,
+        marker_id: int,
+        frame_id: str,
+        namespace_suffix: str,
+    ) -> Marker:
+        marker = Marker()
+        marker.header = self._make_header(stamp, frame_id)
+        marker.ns = f"intersection_names_{namespace_suffix}"
+        marker.id = marker_id
+        marker.type = Marker.TEXT_VIEW_FACING
+        marker.action = Marker.ADD
+
+        marker.pose.position.x = 0.0
+        marker.pose.position.y = 0.0
+        marker.pose.position.z = self.intersection_name_z
+        marker.pose.orientation.w = 1.0
+
+        marker.scale.z = self.intersection_name_scale
+
+        r, g, b, a = self.intersection_name_rgba
+        marker.color.r = r
+        marker.color.g = g
+        marker.color.b = b
+        marker.color.a = a
+
+        marker.text = str(intersection.name) if str(intersection.name) else f"INT:{int(intersection.id.id)}"
+        return marker
+
     def map_callback(self, msg: MapData) -> None:
         intersections = self._selected_intersections(msg)
         if not intersections:
@@ -410,11 +453,24 @@ class MapToRvizMarkers(Node):
         for intersection in intersections:
             intersection_id = int(intersection.id.id)
             frame_id = self._frame_id_for_intersection(intersection_id)
+            intersection_name_frame_id = frame_id
             namespace_suffix = str(intersection_id)
 
             lane_lookup: Dict[int, MapLane] = {
                 int(lane.lane_id): lane for lane in intersection.lane_set
             }
+
+            if self.publish_intersection_names:
+                marker_array.markers.append(
+                    self._make_intersection_name_marker(
+                        intersection=intersection,
+                        stamp=stamp,
+                        marker_id=marker_id,
+                        frame_id=intersection_name_frame_id,
+                        namespace_suffix=namespace_suffix,
+                    )
+                )
+                marker_id += 1
 
             for lane in intersection.lane_set:
                 marker_array.markers.append(

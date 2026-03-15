@@ -36,8 +36,13 @@ map_to_rviz_markers:
     signal_group_z: 0.35
     signal_group_scale: 0.7
 
+    publish_intersection_names: true
+    intersection_name_z: 1.5
+    intersection_name_scale: 1.0
+
     lane_rgba: [0.0, 1.0, 0.0, 1.0]
     connection_rgba: [1.0, 0.6, 0.0, 1.0]
     lane_id_rgba: [1.0, 1.0, 1.0, 1.0]
     arrow_rgba: [0.0, 0.8, 1.0, 1.0]
     signal_group_rgba: [1.0, 0.2, 0.2, 1.0]
+    intersection_name_rgba: [1.0, 1.0, 0.0, 1.0]
