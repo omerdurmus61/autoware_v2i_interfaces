@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from typing import Dict, List, Optional, Tuple
-
+import math
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
@@ -49,6 +49,8 @@ class MapToRvizMarkers(Node):
         self.declare_parameter("arrow_scale_x", 0.8)
         self.declare_parameter("arrow_scale_y", 0.2)
         self.declare_parameter("arrow_scale_z", 0.2)
+        self.declare_parameter("arrow_length", 1.5)
+        self.declare_parameter("arrow_back_offset", 0.8)
 
         self.declare_parameter("publish_signal_group_labels", True)
         self.declare_parameter("signal_group_z", 0.35)
@@ -98,6 +100,8 @@ class MapToRvizMarkers(Node):
         self.arrow_scale_x = float(self.get_parameter("arrow_scale_x").value)
         self.arrow_scale_y = float(self.get_parameter("arrow_scale_y").value)
         self.arrow_scale_z = float(self.get_parameter("arrow_scale_z").value)
+        self.arrow_length = float(self.get_parameter("arrow_length").value)
+        self.arrow_back_offset = float(self.get_parameter("arrow_back_offset").value)
 
         self.publish_signal_group_labels = bool(self.get_parameter("publish_signal_group_labels").value)
         self.signal_group_z = float(self.get_parameter("signal_group_z").value)
@@ -307,6 +311,39 @@ class MapToRvizMarkers(Node):
         if len(points) < 2:
             return None
 
+        end_pt = points[-1]
+
+        ref_index = len(points) - 2
+        while ref_index >= 0:
+            dx = end_pt.x - points[ref_index].x
+            dy = end_pt.y - points[ref_index].y
+            dist = math.hypot(dx, dy)
+            if dist > 1e-3:
+                break
+            ref_index -= 1
+
+        if ref_index < 0:
+            return None
+
+        dx = end_pt.x - points[ref_index].x
+        dy = end_pt.y - points[ref_index].y
+        dist = math.hypot(dx, dy)
+        if dist < 1e-3:
+            return None
+
+        ux = dx / dist
+        uy = dy / dist
+
+        start_pt = Point()
+        start_pt.x = end_pt.x - ux * self.arrow_back_offset
+        start_pt.y = end_pt.y - uy * self.arrow_back_offset
+        start_pt.z = self.arrow_z
+
+        tip_pt = Point()
+        tip_pt.x = start_pt.x + ux * self.arrow_length
+        tip_pt.y = start_pt.y + uy * self.arrow_length
+        tip_pt.z = self.arrow_z
+
         marker = Marker()
         marker.header = self._make_header(stamp, frame_id)
         marker.ns = f"lane_direction_arrows_{namespace_suffix}"
@@ -324,7 +361,7 @@ class MapToRvizMarkers(Node):
         marker.color.b = b
         marker.color.a = a
 
-        marker.points = [points[-2], points[-1]]
+        marker.points = [start_pt, tip_pt]
         marker.pose.orientation.w = 1.0
         return marker
 

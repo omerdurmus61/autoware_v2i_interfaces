@@ -27,10 +27,11 @@ map_to_rviz_markers:
     connection_width: 0.08
 
     publish_direction_arrows: true
-    arrow_z: 0.12
-    arrow_scale_x: 0.8
-    arrow_scale_y: 0.2
-    arrow_scale_z: 0.2
+    arrow_scale_x: 0.2
+    arrow_scale_y: 0.3
+    arrow_scale_z: 0.20
+    arrow_length: 0.90
+    arrow_back_offset: 0.60
 
     publish_signal_group_labels: true
     signal_group_z: 0.35
