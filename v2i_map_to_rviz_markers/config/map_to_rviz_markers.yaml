@@ -28,7 +28,7 @@ map_to_rviz_markers:
 
     publish_direction_arrows: true
     arrow_scale_x: 0.2
-    arrow_scale_y: 0.3
+    arrow_scale_y: 0.4
     arrow_scale_z: 0.20
     arrow_length: 0.90
     arrow_back_offset: 0.60
