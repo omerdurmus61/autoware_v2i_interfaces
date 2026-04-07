@@ -1,4 +1,4 @@
-# V2I Packages for ROS 2 + Autoware
+# V2I Packages for ROS 2 & Autoware
 
 This workspace contains ROS 2 packages that decode V2I UDP traffic (SPaT, MAP, SDSM), convert it into custom ROS messages, and adapt it to Autoware messages.
 
