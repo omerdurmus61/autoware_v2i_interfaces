@@ -136,6 +136,9 @@ class V2ITrafficLightStatusPublisher(Node):
         elif event_state == MovementEvent.PERMISSIVE_MOVEMENT_ALLOWED:
             element.color = TrafficLightElement.GREEN
 
+        elif event_state == MovementEvent.PERMISSIVE_CLEARANCE:
+            element.color = TrafficLightElement.YELLOW
+
         else:
             element.color = TrafficLightElement.UNKNOWN
             element.status = TrafficLightElement.SOLID_OFF

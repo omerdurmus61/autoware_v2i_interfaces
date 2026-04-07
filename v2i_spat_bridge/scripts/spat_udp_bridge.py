@@ -38,6 +38,8 @@ def map_event_state(event_state_str: Any) -> int:
         return MovementEvent.PROTECTED_MOVEMENT_ALLOWED
     if s == "permissive-Movement-Allowed":
         return MovementEvent.PERMISSIVE_MOVEMENT_ALLOWED
+    if s == "permissive-clearance":
+        return MovementEvent.PERMISSIVE_CLEARANCE
 
     return MovementEvent.EVENT_UNKNOWN
 
