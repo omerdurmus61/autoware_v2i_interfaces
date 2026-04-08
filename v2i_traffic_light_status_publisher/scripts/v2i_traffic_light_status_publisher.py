@@ -136,8 +136,8 @@ class V2ITrafficLightStatusPublisher(Node):
         elif event_state == MovementEvent.PERMISSIVE_MOVEMENT_ALLOWED:
             element.color = TrafficLightElement.GREEN
 
-        elif event_state == MovementEvent.PERMISSIVE_CLEARANCE:
-            element.color = TrafficLightElement.YELLOW
+        elif event_state == MovementEvent.PROTECTED_CLEARANCE:
+            element.color = TrafficLightElement.AMBER
 
         else:
             element.color = TrafficLightElement.UNKNOWN
@@ -151,6 +151,7 @@ class V2ITrafficLightStatusPublisher(Node):
             MovementEvent.STOP_AND_REMAIN,
             MovementEvent.PROTECTED_MOVEMENT_ALLOWED,
             MovementEvent.PERMISSIVE_MOVEMENT_ALLOWED,
+            MovementEvent.PROTECTED_CLEARANCE,
         )
 
     def choose_primary_event(self, events: List[MovementEvent]) -> Optional[MovementEvent]:
