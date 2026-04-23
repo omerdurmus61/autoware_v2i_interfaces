@@ -27,6 +27,7 @@ class SdsmToAutowareObjects(Node):
         self.declare_parameter("input_topic", "/v2i/sdsm/raw")
         self.declare_parameter("output_topic", "/v2i/sdsm/objects")
         self.declare_parameter("frame_id", "v2i_intersection_14867")
+        self.declare_parameter("intersection_keys", [])
 
         # Position conversion
         self.declare_parameter("position_scale_x", 0.1)
@@ -64,6 +65,7 @@ class SdsmToAutowareObjects(Node):
         input_topic = str(self.get_parameter("input_topic").value)
         output_topic = str(self.get_parameter("output_topic").value)
         self.frame_id = str(self.get_parameter("frame_id").value)
+        self.intersection_frame_map = self._load_intersection_frame_map()
 
         self.position_scale_x = float(self.get_parameter("position_scale_x").value)
         self.position_scale_y = float(self.get_parameter("position_scale_y").value)
@@ -127,10 +129,10 @@ class SdsmToAutowareObjects(Node):
         self.get_logger().info(f"Publishing DetectedObjects on: {output_topic}")
         self.get_logger().info(f"Output frame_id: {self.frame_id}")
 
-    def _make_header(self, stamp) -> Header:
+    def _make_header(self, stamp, frame_id: str) -> Header:
         header = Header()
         header.stamp = stamp
-        header.frame_id = self.frame_id
+        header.frame_id = frame_id
         return header
 
     def _convert_position(self, raw_x: int, raw_y: int) -> Tuple[float, float]:
@@ -269,14 +271,62 @@ class SdsmToAutowareObjects(Node):
         return detected
 
     def sdsm_callback(self, msg: SDSM) -> None:
+        frame_id = self._frame_id_for_sdsm(msg)
+
         detected_objects_msg = DetectedObjects()
-        detected_objects_msg.header = self._make_header(self.get_clock().now().to_msg())
+        detected_objects_msg.header = self._make_header(
+            self.get_clock().now().to_msg(),
+            frame_id,
+        )
 
         for obj in msg.objects:
             detected_objects_msg.objects.append(self._build_detected_object(obj))
 
         self.objects_pub.publish(detected_objects_msg)
 
+    def _load_intersection_frame_map(self):
+        intersection_keys = (
+            self.get_parameter("intersection_keys")
+            .get_parameter_value()
+            .string_array_value
+        )
+
+        frame_map = {}
+
+        for item in intersection_keys:
+            try:
+                key_part, frame_name = item.split(":")
+                lat_str, lon_str = key_part.split(",")
+
+                ref_lat = int(lat_str.strip())
+                ref_lon = int(lon_str.strip())
+                frame_map[(ref_lat, ref_lon)] = frame_name.strip()
+
+            except ValueError:
+                self.get_logger().warn(
+                    f"Invalid intersection_keys entry: {item}"
+                )
+
+        self.get_logger().info(
+            f"Loaded {len(frame_map)} intersection frame mappings"
+        )
+
+        return frame_map
+
+
+    def _frame_id_for_sdsm(self, msg: SDSM) -> str:
+        key = (int(msg.ref_lat), int(msg.ref_lon))
+
+        frame_id = self.intersection_frame_map.get(key)
+
+        if frame_id is None:
+            self.get_logger().warn(
+                f"Unknown intersection ref_lat={msg.ref_lat}, ref_lon={msg.ref_lon}. "
+                f"Using default frame_id={self.frame_id}"
+            )
+            return self.frame_id
+
+        return frame_id
 
 def main(args=None) -> None:
     rclpy.init(args=args)

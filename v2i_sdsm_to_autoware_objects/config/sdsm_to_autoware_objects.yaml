@@ -2,7 +2,14 @@ sdsm_to_autoware_objects:
   ros__parameters:
     input_topic: "/v2i/sdsm/raw"
     output_topic: "/v2i/sdsm/objects"
-    frame_id: "v2i_intersection_14867"
+    frame_id: "v2i_dummy_intersection"
+    intersection_keys:
+      - "350415343,-852968100:v2i_intersection_40386"
+      - "350423100,-852988040:v2i_intersection_14867"
+      - "350452439,-853069150:v2i_intersection_12753"
+      - "350457770,-853082840:v2i_intersection_19846"
+      - "350457710,-853094200:v2i_intersection_22762"
+      - "350460760,-853126630:v2i_intersection_52349"
 
     position_scale_x: 0.1
     position_scale_y: 0.1
