@@ -27,7 +27,7 @@ class SdsmToAutowareObjects(Node):
         self.declare_parameter("input_topic", "/v2i/sdsm/raw")
         self.declare_parameter("output_topic", "/v2i/sdsm/objects")
         self.declare_parameter("frame_id", "v2i_intersection_14867")
-        self.declare_parameter("intersection_keys", [])
+        self.declare_parameter("intersection_keys", [""])
 
         # Position conversion
         self.declare_parameter("position_scale_x", 0.1)
@@ -294,6 +294,9 @@ class SdsmToAutowareObjects(Node):
         frame_map = {}
 
         for item in intersection_keys:
+            if not item:
+                continue
+
             try:
                 key_part, frame_name = item.split(":")
                 lat_str, lon_str = key_part.split(",")
@@ -305,7 +308,7 @@ class SdsmToAutowareObjects(Node):
             except ValueError:
                 self.get_logger().warn(
                     f"Invalid intersection_keys entry: {item}"
-                )
+        )
 
         self.get_logger().info(
             f"Loaded {len(frame_map)} intersection frame mappings"
