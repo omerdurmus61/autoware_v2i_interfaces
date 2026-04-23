@@ -8,7 +8,7 @@ sdsm_to_autoware_objects:
     position_scale_y: 0.1
     position_offset_x: 0.0
     position_offset_y: 0.0
-    swap_xy: false
+    swap_xy: true
     invert_x: false
     invert_y: false
 
@@ -29,5 +29,5 @@ sdsm_to_autoware_objects:
     unknown_existence_probability: 0.50
 
     use_heading: false
-    default_heading: -60
+    default_heading: -20
     heading_scale_rad: 0.0125
