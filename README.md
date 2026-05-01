@@ -8,6 +8,7 @@ This workspace contains ROS 2 packages that decode V2I UDP traffic (SPaT, MAP, S
 |---|---|---|---|---|
 | `v2i_spat_bridge` | Bridge node | Decode SPaT UDP packets into ROS | UDP `:7114` | `/v2i/spat/raw` (`v2i_spat_msgs/SpatPacket`) |
 | `v2i_traffic_light_status_publisher` | Converter node | Convert SPaT to Autoware traffic lights | `/v2i/spat/raw` | `/perception/traffic_light_recognition/traffic_signals` |
+| `v2i_driver_approved_virtual_traffic_light` | Approval node | Publish Autoware virtual traffic light approval from the DBW steering wheel A button | `/raptor_dbw_interface/driver_input_report` | `/awapi/tmp/virtual_traffic_light_states` |
 | `v2i_map_bridge` | Bridge node | Decode MAP UDP packets into ROS | UDP `:7113` | `/v2i/map/raw` (`v2i_map_msgs/MapData`) |
 | `v2i_map_to_rviz_markers` | Visualization node | Convert MAP to RViz markers | `/v2i/map/raw` | `/v2i/map/lane_markers` (`visualization_msgs/MarkerArray`) |
 | `v2i_sdsm_bridge` | Bridge node | Decode SDSM UDP packets into ROS | UDP `:7112` | `/v2i/sdsm/raw` (`v2i_sdsm_msgs/SDSM`) |
@@ -28,6 +29,7 @@ source /opt/ros/<ros_distro>/setup.bash
 colcon build --packages-select \
   v2i_spat_msgs v2i_map_msgs v2i_sdsm_msgs \
   v2i_spat_bridge v2i_traffic_light_status_publisher \
+  v2i_driver_approved_virtual_traffic_light \
   v2i_map_bridge v2i_map_to_rviz_markers \
   v2i_sdsm_bridge v2i_sdsm_to_autoware_objects
 source install/setup.bash
@@ -93,6 +95,42 @@ Useful params (`config/v2i_traffic_light_status_publisher.yaml`):
 - `output_topic` (default: `/perception/traffic_light_recognition/traffic_signals`)
 - `publish_rate_hz` (default: `10.0`)
 - `signal_timeout_sec` (default: `0.75`)
+
+### `v2i_driver_approved_virtual_traffic_light`
+Brief: Subscribes to the DBW driver input report and publishes Autoware virtual traffic light approval when the steering wheel A button is pressed.
+
+Use this package when Autoware expects a `tier4_v2x_msgs/msg/VirtualTrafficLightStateArray` approval signal for a virtual traffic light. Each A-button rising edge enables approval for a configurable time window, and the node keeps publishing the current approval state at a fixed rate.
+
+Example launch:
+```bash
+ros2 launch v2i_driver_approved_virtual_traffic_light driver_approved_virtual_traffic_light.launch.py
+```
+
+Example input/output checks:
+```bash
+ros2 topic echo /raptor_dbw_interface/driver_input_report
+ros2 topic echo /awapi/tmp/virtual_traffic_light_states
+```
+
+Example override:
+```bash
+ros2 run v2i_driver_approved_virtual_traffic_light driver_approved_virtual_traffic_light_node --ros-args \
+  -p driver_input_topic:=/raptor_dbw_interface/driver_input_report \
+  -p virtual_traffic_light_state_topic:=/awapi/tmp/virtual_traffic_light_states \
+  -p virtual_traffic_light_id:=242039 \
+  -p approval_duration_sec:=10.0 \
+  -p publish_rate_hz:=10.0 \
+  -p is_finalized:=false
+```
+
+Useful params (`config/driver_approved_virtual_traffic_light.param.yaml`):
+- `driver_input_topic` (default: `/raptor_dbw_interface/driver_input_report`)
+- `virtual_traffic_light_state_topic` (default: `/awapi/tmp/virtual_traffic_light_states`)
+- `virtual_traffic_light_type` (default: `virtual`)
+- `virtual_traffic_light_id` (default: `242039`)
+- `approval_duration_sec` (default: `10.0`)
+- `publish_rate_hz` (default: `10.0`)
+- `is_finalized` (default: `false`)
 
 ### `v2i_map_bridge`
 Brief: Listens for MAP UDP frames, decodes lane/intersection geometry, and publishes `v2i_map_msgs/MapData`.
@@ -239,6 +277,11 @@ m.objects.append(o)
 SPaT to Autoware traffic lights:
 ```text
 UDP SPaT -> v2i_spat_bridge -> /v2i/spat/raw -> v2i_traffic_light_status_publisher -> /perception/traffic_light_recognition/traffic_signals
+```
+
+Driver-approved virtual traffic light:
+```text
+/raptor_dbw_interface/driver_input_report -> v2i_driver_approved_virtual_traffic_light -> /awapi/tmp/virtual_traffic_light_states
 ```
 
 SDSM to Autoware detected objects:
