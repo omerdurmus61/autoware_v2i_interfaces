@@ -2,6 +2,14 @@
 
 This workspace contains ROS 2 packages that decode V2I UDP traffic (SPaT, MAP, SDSM), convert it into custom ROS messages, and adapt it to Autoware messages.
 
+### SPaT Message Pipeline Integration with Autoware
+
+![SPaT pipeline](images/spat_autoware_pipeline.png)
+
+### SDSM Message Pipeline Integration with Autoware
+
+![SDSM pipeline](images/sdsm_autoware_pipeline.png)
+
 ## Package Overview
 
 | Package | Type | Purpose | Main Input | Main Output |
