@@ -1,0 +1,30 @@
+input_topic: /v2i/spat/raw
+refresh_rate_hz: 10.0
+stale_timeout_sec: 1.5
+window_title: V2I SPaT Visualizer
+signals:
+  - name: Intersection 14867 SG2
+    intersection_id: 14867
+    signal_group: 2
+    unique_signal_id: 148672
+    description: Main watched signal group for intersection 14867.
+  - name: Intersection 17342 SG2
+    intersection_id: 17342
+    signal_group: 2
+    unique_signal_id: 173422
+    description: Main watched signal group for intersection 17342.
+  - name: Intersection 24187 SG2
+    intersection_id: 24187
+    signal_group: 2
+    unique_signal_id: 241872
+    description: First watched signal group for intersection 24187.
+  - name: Intersection 24187 SG4
+    intersection_id: 24187
+    signal_group: 4
+    unique_signal_id: 241874
+    description: Second watched signal group for intersection 24187.
+  - name: Intersection 12753 SG2
+    intersection_id: 12753
+    signal_group: 2
+    unique_signal_id: 127532
+    description: Main watched signal group for intersection 12753.
