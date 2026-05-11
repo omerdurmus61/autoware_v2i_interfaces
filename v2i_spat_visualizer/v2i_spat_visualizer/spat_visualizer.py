@@ -50,6 +50,7 @@ class TrafficLightWidget(QtWidgets.QFrame):
         self.signal = signal
         self.event_state = MovementEvent.EVENT_UNKNOWN
         self.remaining_seconds: Optional[float] = None
+        self._render_signature: Optional[Tuple[int, str, str, str, str]] = None
         self.setObjectName("trafficLightCard")
         self.setMinimumWidth(145)
         self.setMaximumWidth(165)
@@ -118,11 +119,25 @@ class TrafficLightWidget(QtWidgets.QFrame):
         )
 
     def update_state(self, event_state: int, remaining_seconds: Optional[float]) -> None:
+        next_signature = self._build_render_signature(event_state, remaining_seconds)
+        if next_signature == self._render_signature:
+            self.event_state = event_state
+            self.remaining_seconds = remaining_seconds
+            return
+
         self.event_state = event_state
         self.remaining_seconds = remaining_seconds
         self._apply_state()
 
     def mark_stale(self) -> None:
+        next_signature = self._build_render_signature(
+            MovementEvent.EVENT_UNKNOWN, None
+        )
+        if next_signature == self._render_signature:
+            self.event_state = MovementEvent.EVENT_UNKNOWN
+            self.remaining_seconds = None
+            return
+
         self.event_state = MovementEvent.EVENT_UNKNOWN
         self.remaining_seconds = None
         self._apply_state()
@@ -133,6 +148,44 @@ class TrafficLightWidget(QtWidgets.QFrame):
         if self.remaining_seconds is None:
             return "?"
         return f"{max(0.0, self.remaining_seconds):.1f}s"
+
+    def _build_render_signature(
+        self, event_state: int, remaining_seconds: Optional[float]
+    ) -> Tuple[int, str, str, str, str]:
+        previous_state = self.event_state
+        previous_remaining = self.remaining_seconds
+        self.event_state = event_state
+        self.remaining_seconds = remaining_seconds
+
+        if self.event_state == MovementEvent.STOP_AND_REMAIN:
+            state_name = "Red"
+        elif self.event_state == MovementEvent.PROTECTED_CLEARANCE:
+            state_name = "Yellow"
+        elif self.event_state in (
+            MovementEvent.PROTECTED_MOVEMENT_ALLOWED,
+            MovementEvent.PERMISSIVE_MOVEMENT_ALLOWED,
+        ):
+            state_name = "Green"
+        else:
+            state_name = "Unknown"
+
+        signature = (
+            event_state,
+            state_name,
+            self._countdown_text(self.event_state == MovementEvent.STOP_AND_REMAIN),
+            self._countdown_text(self.event_state == MovementEvent.PROTECTED_CLEARANCE),
+            self._countdown_text(
+                self.event_state
+                in (
+                    MovementEvent.PROTECTED_MOVEMENT_ALLOWED,
+                    MovementEvent.PERMISSIVE_MOVEMENT_ALLOWED,
+                )
+            ),
+        )
+
+        self.event_state = previous_state
+        self.remaining_seconds = previous_remaining
+        return signature
 
     def _apply_state(self) -> None:
         red_color = LIGHT_OFF
@@ -175,6 +228,13 @@ class TrafficLightWidget(QtWidgets.QFrame):
             )
         )
         self.state_label.setText(state_name)
+        self._render_signature = (
+            self.event_state,
+            state_name,
+            self.red_lamp.text(),
+            self.yellow_lamp.text(),
+            self.green_lamp.text(),
+        )
 
 
 class SpatVisualizerWindow(QtWidgets.QMainWindow):
