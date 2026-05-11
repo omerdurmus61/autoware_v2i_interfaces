@@ -23,6 +23,7 @@ WINDOW_BG = "#0f172a"
 TEXT_PRIMARY = "#e5e7eb"
 TEXT_SECONDARY = "#94a3b8"
 TEXT_DARK = "#0f172a"
+WRAP_WINDOW_DECISECONDS = 600.0
 
 
 def round_seconds_for_display(seconds: float) -> float:
@@ -378,7 +379,7 @@ class V2ISpatVisualizer(Node):
 
     def normalize_decisecond_delta(self, delta_deciseconds: float) -> float:
         if delta_deciseconds < 0.0:
-            return delta_deciseconds + 36000.0
+            return delta_deciseconds + WRAP_WINDOW_DECISECONDS
         return delta_deciseconds
 
     def raw_decisecond_delta(
