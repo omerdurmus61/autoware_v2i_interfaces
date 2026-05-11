@@ -284,15 +284,7 @@ class V2ISpatVisualizer(Node):
         )
 
     def event_end_offset_deciseconds(self, event: MovementEvent) -> Optional[int]:
-        """
-        For phase switching visualization, prefer the earliest declared end of the
-        active phase. That corresponds to the next immediate color transition.
-        """
-        if event.timing.has_min_end_time:
-            return int(event.timing.min_end_time)
-        if event.timing.has_max_end_time:
-            return int(event.timing.max_end_time)
-        return None
+        return self.select_event_end_offset_deciseconds(event, current_deciseconds=None)
 
     def current_spat_time_deciseconds(self, moy: int, timestamp_ms: int) -> float:
         """
@@ -303,21 +295,71 @@ class V2ISpatVisualizer(Node):
         second_in_minute = float(timestamp_ms) / 1000.0
         return (minute_in_hour * 60.0 + second_in_minute) * 10.0
 
+    def normalize_decisecond_delta(self, delta_deciseconds: float) -> float:
+        if delta_deciseconds < 0.0:
+            return delta_deciseconds + 36000.0
+        return delta_deciseconds
+
+    def raw_decisecond_delta(
+        self, end_offset_deciseconds: float, current_deciseconds: float
+    ) -> float:
+        return end_offset_deciseconds - current_deciseconds
+
+    def select_event_end_offset_deciseconds(
+        self, event: MovementEvent, current_deciseconds: Optional[float]
+    ) -> Optional[int]:
+        """
+        Choose the more meaningful end target for countdown display.
+
+        Prefer min_end_time by default, but if it is effectively "now" while
+        max_end_time still provides a reasonable future horizon, use max_end_time
+        instead. This avoids false one-hour wraps and nearly-fixed tiny countdowns.
+        """
+        has_min = bool(event.timing.has_min_end_time)
+        has_max = bool(event.timing.has_max_end_time)
+        min_end = int(event.timing.min_end_time) if has_min else None
+        max_end = int(event.timing.max_end_time) if has_max else None
+
+        if not has_min and not has_max:
+            return None
+        if current_deciseconds is None:
+            return min_end if has_min else max_end
+        if not has_min:
+            return max_end
+        if not has_max:
+            return min_end
+
+        raw_d_min = self.raw_decisecond_delta(float(min_end), current_deciseconds) / 10.0
+        raw_d_max = self.raw_decisecond_delta(float(max_end), current_deciseconds) / 10.0
+        d_min = self.normalize_decisecond_delta(
+            self.raw_decisecond_delta(float(min_end), current_deciseconds)
+        ) / 10.0
+        d_max = self.normalize_decisecond_delta(
+            self.raw_decisecond_delta(float(max_end), current_deciseconds)
+        ) / 10.0
+
+        min_is_effectively_now = -1.0 <= raw_d_min <= 1.0
+        max_is_reasonable_future = 1.0 < d_max <= 120.0
+        max_is_not_effectively_now = raw_d_max > 1.0
+
+        if min_is_effectively_now and max_is_reasonable_future and max_is_not_effectively_now:
+            return max_end
+
+        return min_end
+
     def remaining_seconds_from_spat(
         self, moy: int, timestamp_ms: int, event: MovementEvent
     ) -> Optional[float]:
-        end_offset_deciseconds = self.event_end_offset_deciseconds(event)
+        current_deciseconds = self.current_spat_time_deciseconds(moy, timestamp_ms)
+        end_offset_deciseconds = self.select_event_end_offset_deciseconds(
+            event, current_deciseconds
+        )
         if end_offset_deciseconds is None:
             return None
 
-        current_deciseconds = self.current_spat_time_deciseconds(moy, timestamp_ms)
-        remaining_deciseconds = float(end_offset_deciseconds) - current_deciseconds
-
-        # TimeMark values wrap within the current/next hour. If the end marker is
-        # behind the current marker numerically, interpret it as belonging to the
-        # next hour window.
-        if remaining_deciseconds < 0.0:
-            remaining_deciseconds += 36000.0
+        remaining_deciseconds = self.normalize_decisecond_delta(
+            float(end_offset_deciseconds) - current_deciseconds
+        )
 
         return max(0.0, remaining_deciseconds / 10.0)
 
@@ -418,15 +460,47 @@ class V2ISpatVisualizer(Node):
                 if active_event is None:
                     continue
 
-                offset_deciseconds = self.event_end_offset_deciseconds(active_event)
                 current_spat_deciseconds = self.current_spat_time_deciseconds(
                     source_moy, source_timestamp_ms
+                )
+                offset_deciseconds = self.select_event_end_offset_deciseconds(
+                    active_event, current_spat_deciseconds
                 )
                 remaining_seconds = self.remaining_seconds_from_spat(
                     source_moy, source_timestamp_ms, active_event
                 )
 
                 if self.debug_spat_timing:
+                    min_end = (
+                        int(active_event.timing.min_end_time)
+                        if active_event.timing.has_min_end_time
+                        else None
+                    )
+                    max_end = (
+                        int(active_event.timing.max_end_time)
+                        if active_event.timing.has_max_end_time
+                        else None
+                    )
+                    d_min = None
+                    d_max = None
+                    if min_end is not None:
+                        raw_d_min = self.raw_decisecond_delta(
+                            float(min_end), current_spat_deciseconds
+                        ) / 10.0
+                        d_min = self.normalize_decisecond_delta(
+                            float(min_end) - current_spat_deciseconds
+                        ) / 10.0
+                    else:
+                        raw_d_min = None
+                    if max_end is not None:
+                        raw_d_max = self.raw_decisecond_delta(
+                            float(max_end), current_spat_deciseconds
+                        ) / 10.0
+                        d_max = self.normalize_decisecond_delta(
+                            float(max_end) - current_spat_deciseconds
+                        ) / 10.0
+                    else:
+                        raw_d_max = None
                     all_events_description = "; ".join(
                         self.describe_event(event) for event in state.events
                     )
@@ -439,6 +513,10 @@ class V2ISpatVisualizer(Node):
                         f"time_stamp_ms={source_timestamp_ms} "
                         f"current_spat_ds={current_spat_deciseconds:.1f} "
                         f"selected=({self.describe_event(active_event)}) "
+                        f"raw_d_min_s={raw_d_min} "
+                        f"raw_d_max_s={raw_d_max} "
+                        f"d_min_s={d_min} "
+                        f"d_max_s={d_max} "
                         f"selected_end_ds={offset_deciseconds} "
                         f"remaining_s={remaining_seconds} "
                         f"events=[{all_events_description}]"
