@@ -84,7 +84,7 @@ class TrafficLightWidget(QtWidgets.QFrame):
         )
         lamp_layout = QtWidgets.QVBoxLayout(self.lamp_box)
         lamp_layout.setContentsMargins(12, 12, 12, 12)
-        lamp_layout.setSpacing(8)
+        lamp_layout.setSpacing(10)
 
         self.red_lamp = self._create_lamp()
         self.yellow_lamp = self._create_lamp()
@@ -182,7 +182,7 @@ class SpatVisualizerWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle(window_title)
         self.resize(860, 330)
-        self.setMinimumSize(820, 300)
+        self.setMinimumSize(180, 300)
 
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
@@ -190,21 +190,17 @@ class SpatVisualizerWindow(QtWidgets.QMainWindow):
         outer.setContentsMargins(12, 12, 12, 12)
         outer.setSpacing(8)
 
-        header = QtWidgets.QLabel("V2I Traffic Light SPaT Monitor")
-        header.setStyleSheet("font-size: 16px; font-weight: 800; color: #0f172a;")
-        outer.addWidget(header)
-
-        subheader = QtWidgets.QLabel(
-            "Five configured signal groups are visualized with live color and remaining-time updates."
+        self.viewport = QtWidgets.QFrame()
+        self.viewport.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self.viewport.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding
         )
-        subheader.setStyleSheet("font-size: 10px; color: #334155;")
-        outer.addWidget(subheader)
+        outer.addWidget(self.viewport, 1)
 
-        content = QtWidgets.QWidget()
-        outer.addWidget(content, 1)
-        grid = QtWidgets.QGridLayout(content)
+        self.content = QtWidgets.QWidget(self.viewport)
+        grid = QtWidgets.QGridLayout(self.content)
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(8)
+        grid.setHorizontalSpacing(12)
         grid.setVerticalSpacing(8)
 
         self.widgets: Dict[int, TrafficLightWidget] = {}
@@ -212,6 +208,21 @@ class SpatVisualizerWindow(QtWidgets.QMainWindow):
             widget = TrafficLightWidget(signal)
             grid.addWidget(widget, 0, index)
             self.widgets[signal.unique_signal_id] = widget
+
+        self.content.setFixedSize(self.content.sizeHint())
+        QtCore.QTimer.singleShot(0, self._position_content)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._position_content()
+
+    def _position_content(self) -> None:
+        available_width = self.viewport.width()
+        # Keep the card strip fixed-size and anchored to the left. When the
+        # window narrows, crop from the right edge instead of rescaling.
+        x = 0
+        y = max(0, (self.viewport.height() - self.content.height()) // 2)
+        self.content.move(x, y)
 
     def update_signal(
         self, unique_signal_id: int, event_state: int, remaining_seconds: Optional[float]
