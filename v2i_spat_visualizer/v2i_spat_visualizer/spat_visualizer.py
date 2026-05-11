@@ -53,6 +53,21 @@ class SignalSnapshot:
     source_moy: int
     source_timestamp_ms: int
     end_offset_deciseconds: Optional[int]
+    update_serial: int
+
+
+@dataclass
+class DisplaySignalState:
+    event_state: int
+    remaining_seconds: Optional[float]
+    end_offset_deciseconds: Optional[int]
+    last_source_update_monotonic: float
+    last_valid_monotonic: float
+    last_processed_serial: int
+    pending_event_state: Optional[int] = None
+    pending_event_count: int = 0
+    pending_end_offset_deciseconds: Optional[int] = None
+    pending_end_count: int = 0
 
 
 class TrafficLightWidget(QtWidgets.QFrame):
@@ -319,6 +334,11 @@ class V2ISpatVisualizer(Node):
         self.declare_parameter("input_topic", "/v2i/spat/raw")
         self.declare_parameter("refresh_rate_hz", 10.0)
         self.declare_parameter("stale_timeout_sec", 1.5)
+        self.declare_parameter("display_unknown_hold_sec", 0.75)
+        self.declare_parameter("display_state_confirm_count", 2)
+        self.declare_parameter("display_end_shift_confirm_count", 2)
+        self.declare_parameter("display_small_end_shift_sec", 1.0)
+        self.declare_parameter("keep_last_valid_on_unknown", True)
         self.declare_parameter("window_title", "V2I SPaT Visualizer")
         self.declare_parameter("debug_spat_timing", False)
         config_file = str(self.get_parameter("config_file").value)
@@ -331,6 +351,42 @@ class V2ISpatVisualizer(Node):
         self.stale_timeout_sec = float(
             config.get("stale_timeout_sec", self.get_parameter("stale_timeout_sec").value)
         )
+        self.display_unknown_hold_sec = float(
+            config.get(
+                "display_unknown_hold_sec",
+                self.get_parameter("display_unknown_hold_sec").value,
+            )
+        )
+        self.display_state_confirm_count = max(
+            1,
+            int(
+                config.get(
+                    "display_state_confirm_count",
+                    self.get_parameter("display_state_confirm_count").value,
+                )
+            ),
+        )
+        self.display_end_shift_confirm_count = max(
+            1,
+            int(
+                config.get(
+                    "display_end_shift_confirm_count",
+                    self.get_parameter("display_end_shift_confirm_count").value,
+                )
+            ),
+        )
+        self.display_small_end_shift_sec = float(
+            config.get(
+                "display_small_end_shift_sec",
+                self.get_parameter("display_small_end_shift_sec").value,
+            )
+        )
+        self.keep_last_valid_on_unknown = bool(
+            config.get(
+                "keep_last_valid_on_unknown",
+                self.get_parameter("keep_last_valid_on_unknown").value,
+            )
+        )
         self.window_title = str(
             config.get("window_title", self.get_parameter("window_title").value)
         )
@@ -342,6 +398,8 @@ class V2ISpatVisualizer(Node):
             (signal.intersection_id, signal.signal_group): signal for signal in self.signals
         }
         self.snapshots: Dict[int, SignalSnapshot] = {}
+        self.display_states: Dict[int, DisplaySignalState] = {}
+        self.snapshot_update_serial = 0
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -515,6 +573,153 @@ class V2ISpatVisualizer(Node):
 
         return ordered_candidate
 
+    def _is_valid_display_state(self, event_state: int) -> bool:
+        return self.is_supported_event_state(event_state)
+
+    def _accept_display_snapshot(
+        self,
+        unique_signal_id: int,
+        snapshot: SignalSnapshot,
+        event_state: int,
+        remaining_seconds: Optional[float],
+        end_offset_deciseconds: Optional[int],
+        current_monotonic: float,
+    ) -> None:
+        display_state = self.display_states.get(unique_signal_id)
+        if display_state is None:
+            self.display_states[unique_signal_id] = DisplaySignalState(
+                event_state=event_state,
+                remaining_seconds=remaining_seconds,
+                end_offset_deciseconds=end_offset_deciseconds,
+                last_source_update_monotonic=snapshot.last_update_monotonic,
+                last_valid_monotonic=current_monotonic,
+                last_processed_serial=snapshot.update_serial,
+            )
+            return
+
+        display_state.event_state = event_state
+        display_state.remaining_seconds = remaining_seconds
+        display_state.end_offset_deciseconds = end_offset_deciseconds
+        display_state.last_source_update_monotonic = snapshot.last_update_monotonic
+        display_state.last_processed_serial = snapshot.update_serial
+        display_state.pending_event_state = None
+        display_state.pending_event_count = 0
+        display_state.pending_end_offset_deciseconds = None
+        display_state.pending_end_count = 0
+        if self._is_valid_display_state(event_state):
+            display_state.last_valid_monotonic = current_monotonic
+
+    def _stabilize_display_state(
+        self, unique_signal_id: int, current_monotonic: float
+    ) -> Optional[Tuple[int, Optional[float]]]:
+        snapshot = self.snapshots.get(unique_signal_id)
+        display_state = self.display_states.get(unique_signal_id)
+
+        if snapshot is None:
+            if display_state is None:
+                return None
+            if (
+                self.keep_last_valid_on_unknown
+                and (current_monotonic - display_state.last_valid_monotonic)
+                <= self.display_unknown_hold_sec
+            ):
+                remaining_seconds = display_state.remaining_seconds
+                if remaining_seconds is not None:
+                    elapsed = current_monotonic - display_state.last_source_update_monotonic
+                    remaining_seconds = max(0.0, remaining_seconds - elapsed)
+                return display_state.event_state, remaining_seconds
+
+            self.display_states.pop(unique_signal_id, None)
+            return None
+
+        if display_state is None:
+            self._accept_display_snapshot(
+                unique_signal_id,
+                snapshot,
+                snapshot.event_state,
+                snapshot.remaining_seconds,
+                snapshot.end_offset_deciseconds,
+                current_monotonic,
+            )
+            display_state = self.display_states[unique_signal_id]
+        elif snapshot.update_serial != display_state.last_processed_serial:
+            candidate_state = snapshot.event_state
+            candidate_remaining = snapshot.remaining_seconds
+            candidate_end = snapshot.end_offset_deciseconds
+
+            if (
+                not self._is_valid_display_state(candidate_state)
+                and self.keep_last_valid_on_unknown
+            ):
+                display_state.last_processed_serial = snapshot.update_serial
+            elif candidate_state != display_state.event_state:
+                if display_state.pending_event_state == candidate_state:
+                    display_state.pending_event_count += 1
+                else:
+                    display_state.pending_event_state = candidate_state
+                    display_state.pending_event_count = 1
+
+                if display_state.pending_event_count >= self.display_state_confirm_count:
+                    self._accept_display_snapshot(
+                        unique_signal_id,
+                        snapshot,
+                        candidate_state,
+                        candidate_remaining,
+                        candidate_end,
+                        current_monotonic,
+                    )
+                    display_state = self.display_states[unique_signal_id]
+                else:
+                    display_state.last_processed_serial = snapshot.update_serial
+            else:
+                display_state.pending_event_state = None
+                display_state.pending_event_count = 0
+
+                accept_end_update = False
+                if candidate_end is None or display_state.end_offset_deciseconds is None:
+                    accept_end_update = True
+                else:
+                    end_shift_seconds = abs(
+                        candidate_end - display_state.end_offset_deciseconds
+                    ) / 10.0
+                    if end_shift_seconds <= self.display_small_end_shift_sec:
+                        accept_end_update = True
+                    else:
+                        if display_state.pending_end_offset_deciseconds == candidate_end:
+                            display_state.pending_end_count += 1
+                        else:
+                            display_state.pending_end_offset_deciseconds = candidate_end
+                            display_state.pending_end_count = 1
+
+                        if (
+                            display_state.pending_end_count
+                            >= self.display_end_shift_confirm_count
+                        ):
+                            accept_end_update = True
+
+                if accept_end_update:
+                    self._accept_display_snapshot(
+                        unique_signal_id,
+                        snapshot,
+                        candidate_state,
+                        candidate_remaining,
+                        candidate_end,
+                        current_monotonic,
+                    )
+                    display_state = self.display_states[unique_signal_id]
+                else:
+                    display_state.last_processed_serial = snapshot.update_serial
+
+        if display_state is None:
+            return None
+
+        remaining_seconds = display_state.remaining_seconds
+        if remaining_seconds is not None:
+            elapsed = current_monotonic - display_state.last_source_update_monotonic
+            remaining_seconds = max(0.0, remaining_seconds - elapsed)
+
+        return display_state.event_state, remaining_seconds
+
     def describe_event(self, event: MovementEvent) -> str:
         min_end = int(event.timing.min_end_time) if event.timing.has_min_end_time else None
         max_end = int(event.timing.max_end_time) if event.timing.has_max_end_time else None
@@ -551,6 +756,14 @@ class V2ISpatVisualizer(Node):
                 remaining_seconds = self.remaining_seconds_from_spat(
                     source_moy, source_timestamp_ms, active_event
                 )
+                event_state = int(active_event.event_state)
+
+                if (
+                    not self.is_supported_event_state(event_state)
+                    and self.keep_last_valid_on_unknown
+                    and configured_signal.unique_signal_id in self.snapshots
+                ):
+                    continue
 
                 if self.debug_spat_timing:
                     min_end = (
@@ -604,13 +817,15 @@ class V2ISpatVisualizer(Node):
                         f"events=[{all_events_description}]"
                     )
 
+                self.snapshot_update_serial += 1
                 self.snapshots[configured_signal.unique_signal_id] = SignalSnapshot(
-                    event_state=int(active_event.event_state),
+                    event_state=event_state,
                     remaining_seconds=remaining_seconds,
                     last_update_monotonic=receipt_time,
                     source_moy=source_moy,
                     source_timestamp_ms=source_timestamp_ms,
                     end_offset_deciseconds=offset_deciseconds,
+                    update_serial=self.snapshot_update_serial,
                 )
 
 
@@ -667,23 +882,15 @@ def main(args: Optional[List[str]] = None) -> None:
     def refresh_widgets() -> None:
         current_monotonic = node.get_clock().now().nanoseconds / 1e9
         for signal in node.signals:
-            snapshot = node.snapshots.get(signal.unique_signal_id)
-            if snapshot is None:
-                window.mark_stale(signal.unique_signal_id)
-                continue
-
-            if (current_monotonic - snapshot.last_update_monotonic) > node.stale_timeout_sec:
-                window.mark_stale(signal.unique_signal_id)
-                continue
-
-            remaining_seconds = snapshot.remaining_seconds
-            if remaining_seconds is not None:
-                elapsed = current_monotonic - snapshot.last_update_monotonic
-                remaining_seconds = max(0.0, remaining_seconds - elapsed)
-
-            window.update_signal(
-                signal.unique_signal_id, snapshot.event_state, remaining_seconds
+            stabilized = node._stabilize_display_state(
+                signal.unique_signal_id, current_monotonic
             )
+            if stabilized is None:
+                window.mark_stale(signal.unique_signal_id)
+                continue
+
+            event_state, remaining_seconds = stabilized
+            window.update_signal(signal.unique_signal_id, event_state, remaining_seconds)
 
     ui_refresh_timer.timeout.connect(refresh_widgets)
     ui_refresh_timer.start(max(1, int(1000.0 / max(1.0, node.refresh_rate_hz))))
