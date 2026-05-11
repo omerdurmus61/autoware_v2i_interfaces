@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 import rclpy
@@ -239,6 +238,7 @@ class V2ISpatVisualizer(Node):
         self.declare_parameter("refresh_rate_hz", 10.0)
         self.declare_parameter("stale_timeout_sec", 1.5)
         self.declare_parameter("window_title", "V2I SPaT Visualizer")
+        self.declare_parameter("debug_spat_timing", False)
         config_file = str(self.get_parameter("config_file").value)
         config = load_visualizer_config(config_file)
 
@@ -251,6 +251,9 @@ class V2ISpatVisualizer(Node):
         )
         self.window_title = str(
             config.get("window_title", self.get_parameter("window_title").value)
+        )
+        self.debug_spat_timing = bool(
+            config.get("debug_spat_timing", self.get_parameter("debug_spat_timing").value)
         )
         self.signals = self._load_signals_from_config(config)
         self.signals_by_key: Dict[Tuple[int, int], ConfiguredSignal] = {
@@ -270,6 +273,53 @@ class V2ISpatVisualizer(Node):
         configured_ids = ", ".join(str(signal.unique_signal_id) for signal in self.signals)
         self.get_logger().info(f"Loaded config file: {config_file}")
         self.get_logger().info(f"Watching unique signal IDs: {configured_ids}")
+        self.get_logger().info(f"SPaT timing debug: {self.debug_spat_timing}")
+
+    def is_supported_event_state(self, event_state: int) -> bool:
+        return event_state in (
+            MovementEvent.STOP_AND_REMAIN,
+            MovementEvent.PROTECTED_MOVEMENT_ALLOWED,
+            MovementEvent.PROTECTED_CLEARANCE,
+            MovementEvent.PERMISSIVE_MOVEMENT_ALLOWED,
+        )
+
+    def event_end_offset_deciseconds(self, event: MovementEvent) -> Optional[int]:
+        """
+        For phase switching visualization, prefer the earliest declared end of the
+        active phase. That corresponds to the next immediate color transition.
+        """
+        if event.timing.has_min_end_time:
+            return int(event.timing.min_end_time)
+        if event.timing.has_max_end_time:
+            return int(event.timing.max_end_time)
+        return None
+
+    def current_spat_time_deciseconds(self, moy: int, timestamp_ms: int) -> float:
+        """
+        Convert the SPaT message's current time reference into the same time axis
+        used by event min/max end times: deciseconds within the current hour.
+        """
+        minute_in_hour = int(moy) % 60
+        second_in_minute = float(timestamp_ms) / 1000.0
+        return (minute_in_hour * 60.0 + second_in_minute) * 10.0
+
+    def remaining_seconds_from_spat(
+        self, moy: int, timestamp_ms: int, event: MovementEvent
+    ) -> Optional[float]:
+        end_offset_deciseconds = self.event_end_offset_deciseconds(event)
+        if end_offset_deciseconds is None:
+            return None
+
+        current_deciseconds = self.current_spat_time_deciseconds(moy, timestamp_ms)
+        remaining_deciseconds = float(end_offset_deciseconds) - current_deciseconds
+
+        # TimeMark values wrap within the current/next hour. If the end marker is
+        # behind the current marker numerically, interpret it as belonging to the
+        # next hour window.
+        if remaining_deciseconds < 0.0:
+            remaining_deciseconds += 36000.0
+
+        return max(0.0, remaining_deciseconds / 10.0)
 
     def _load_signals_from_config(self, config: Dict) -> List[ConfiguredSignal]:
         raw_signals = config.get("signals", [])
@@ -308,56 +358,47 @@ class V2ISpatVisualizer(Node):
 
         return signals
 
-    def choose_primary_event(self, events: List[MovementEvent]) -> Optional[MovementEvent]:
-        supported: List[Tuple[int, MovementEvent]] = []
-        fallback: List[MovementEvent] = []
+    def choose_active_event(self, events: List[MovementEvent]) -> Optional[MovementEvent]:
+        """
+        Interpret the SPaT event list as an ordered phase sequence.
 
-        for event in events:
-            if event.event_state == MovementEvent.EVENT_UNKNOWN:
-                continue
-
-            if event.timing.has_max_end_time:
-                supported.append((int(event.timing.max_end_time), event))
-            elif event.timing.has_min_end_time:
-                supported.append((int(event.timing.min_end_time), event))
-            else:
-                fallback.append(event)
-
-        if supported:
-            supported.sort(key=lambda item: item[0])
-            return supported[0][1]
-        if fallback:
-            return fallback[0]
-        return events[0] if events else None
-
-    def _predict_end_time_from_guide(
-        self, moy: int, timestamp_ms: int, event: MovementEvent
-    ) -> Tuple[Optional[datetime], Optional[int]]:
-        offset_deciseconds: Optional[int] = None
-        if event.timing.has_max_end_time:
-            offset_deciseconds = int(event.timing.max_end_time)
-        elif event.timing.has_min_end_time:
-            offset_deciseconds = int(event.timing.min_end_time)
-
-        if offset_deciseconds is None:
-            return None, None
-
-        current_year = datetime.now(timezone.utc).year
-        year_start = datetime(current_year, 1, 1, tzinfo=timezone.utc)
-        source_time = year_start + timedelta(minutes=int(moy), milliseconds=int(timestamp_ms))
-        predicted_end_time = source_time + timedelta(seconds=offset_deciseconds / 10.0)
-        return predicted_end_time, offset_deciseconds
-
-    def _remaining_seconds_from_prediction(
-        self, predicted_end_time: Optional[datetime], offset_deciseconds: Optional[int]
-    ) -> Optional[float]:
-        if predicted_end_time is None or offset_deciseconds is None:
+        The first supported event is treated as the active phase, and its earliest
+        available end bound is used as the immediate switch time. If the order is
+        not usable, fall back to the supported event with the smallest end time.
+        """
+        if not events:
             return None
 
-        remaining_seconds = (predicted_end_time - datetime.now(timezone.utc)).total_seconds()
-        if remaining_seconds < -1.0 or remaining_seconds > 3600.0:
-            return offset_deciseconds / 10.0
-        return max(0.0, remaining_seconds)
+        supported_in_order: List[MovementEvent] = [
+            event for event in events if self.is_supported_event_state(int(event.event_state))
+        ]
+        if not supported_in_order:
+            return events[0]
+
+        ordered_candidate = supported_in_order[0]
+        if self.event_end_offset_deciseconds(ordered_candidate) is not None:
+            return ordered_candidate
+
+        timed_candidates: List[Tuple[int, MovementEvent]] = []
+        for event in supported_in_order:
+            end_offset = self.event_end_offset_deciseconds(event)
+            if end_offset is not None:
+                timed_candidates.append((end_offset, event))
+
+        if timed_candidates:
+            timed_candidates.sort(key=lambda item: item[0])
+            return timed_candidates[0][1]
+
+        return ordered_candidate
+
+    def describe_event(self, event: MovementEvent) -> str:
+        min_end = int(event.timing.min_end_time) if event.timing.has_min_end_time else None
+        max_end = int(event.timing.max_end_time) if event.timing.has_max_end_time else None
+        return (
+            f"state={int(event.event_state)} "
+            f"min_end={min_end} "
+            f"max_end={max_end}"
+        )
 
     def spat_callback(self, msg: SpatPacket) -> None:
         receipt_time = self.get_clock().now().nanoseconds / 1e9
@@ -373,19 +414,38 @@ class V2ISpatVisualizer(Node):
                 if configured_signal is None or not state.events:
                     continue
 
-                primary_event = self.choose_primary_event(list(state.events))
-                if primary_event is None:
+                active_event = self.choose_active_event(list(state.events))
+                if active_event is None:
                     continue
 
-                predicted_end_time, offset_deciseconds = self._predict_end_time_from_guide(
-                    source_moy, source_timestamp_ms, primary_event
+                offset_deciseconds = self.event_end_offset_deciseconds(active_event)
+                current_spat_deciseconds = self.current_spat_time_deciseconds(
+                    source_moy, source_timestamp_ms
                 )
-                remaining_seconds = self._remaining_seconds_from_prediction(
-                    predicted_end_time, offset_deciseconds
+                remaining_seconds = self.remaining_seconds_from_spat(
+                    source_moy, source_timestamp_ms, active_event
                 )
 
+                if self.debug_spat_timing:
+                    all_events_description = "; ".join(
+                        self.describe_event(event) for event in state.events
+                    )
+                    self.get_logger().info(
+                        "SPaT debug | "
+                        f"intersection={intersection_id} "
+                        f"signal_group={signal_group} "
+                        f"unique_id={configured_signal.unique_signal_id} "
+                        f"moy={source_moy} "
+                        f"time_stamp_ms={source_timestamp_ms} "
+                        f"current_spat_ds={current_spat_deciseconds:.1f} "
+                        f"selected=({self.describe_event(active_event)}) "
+                        f"selected_end_ds={offset_deciseconds} "
+                        f"remaining_s={remaining_seconds} "
+                        f"events=[{all_events_description}]"
+                    )
+
                 self.snapshots[configured_signal.unique_signal_id] = SignalSnapshot(
-                    event_state=int(primary_event.event_state),
+                    event_state=int(active_event.event_state),
                     remaining_seconds=remaining_seconds,
                     last_update_monotonic=receipt_time,
                     source_moy=source_moy,

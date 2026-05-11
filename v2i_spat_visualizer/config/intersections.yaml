@@ -2,6 +2,7 @@ input_topic: /v2i/spat/raw
 refresh_rate_hz: 10.0
 stale_timeout_sec: 1.5
 window_title: V2I SPaT Visualizer
+debug_spat_timing: true
 signals:
   - name: Intersection 14867 SG2
     intersection_id: 14867
