@@ -27,11 +27,12 @@ TEXT_DARK = "#0f172a"
 
 def round_seconds_for_display(seconds: float) -> float:
     """
-    Round only for visualization, using half-up behavior at one decimal place.
-    Keep the internal timing math untouched.
+    Quantize only for visualization at one decimal place without rounding up.
+    Keep the internal timing math untouched so the displayed value does not
+    jump from 2.8 -> 2.9 or 39.9 -> 40.0 because of sub-decimal jitter.
     """
     non_negative = max(0.0, seconds)
-    return int(non_negative * 10.0 + 0.5) / 10.0
+    return int(non_negative * 10.0) / 10.0
 
 
 @dataclass(frozen=True)
