@@ -25,6 +25,15 @@ TEXT_SECONDARY = "#94a3b8"
 TEXT_DARK = "#0f172a"
 
 
+def round_seconds_for_display(seconds: float) -> float:
+    """
+    Round only for visualization, using half-up behavior at one decimal place.
+    Keep the internal timing math untouched.
+    """
+    non_negative = max(0.0, seconds)
+    return int(non_negative * 10.0 + 0.5) / 10.0
+
+
 @dataclass(frozen=True)
 class ConfiguredSignal:
     name: str
@@ -147,7 +156,7 @@ class TrafficLightWidget(QtWidgets.QFrame):
             return "--"
         if self.remaining_seconds is None:
             return "?"
-        return f"{max(0.0, self.remaining_seconds):.1f}s"
+        return f"{round_seconds_for_display(self.remaining_seconds):.1f}s"
 
     def _build_render_signature(
         self, event_state: int, remaining_seconds: Optional[float]
