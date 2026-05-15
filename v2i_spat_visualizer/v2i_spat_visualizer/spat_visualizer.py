@@ -12,7 +12,6 @@ from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from v2i_spat_msgs.msg import MovementEvent, SpatPacket
 
-
 LIGHT_OFF = "#263238"
 RED_ON = "#e53935"
 YELLOW_ON = "#fdd835"
