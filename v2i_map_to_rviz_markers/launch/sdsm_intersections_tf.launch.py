@@ -32,13 +32,16 @@ def generate_launch_description():
     nodes.append(static_tf(377.081, -218.954, 0, 0, 0, 0,
                            "v2i_intersection_40386", "v2i_intersection_27482", "tf_27482"))
 
-    nodes.append(static_tf(-371.567, 160.854, 0, 0, 0, 0,
+    # Updated using new SDSM center of Douglas / 17342
+    nodes.append(static_tf(-372.379, 159.911, 0, 0, 0, 0,
                            "v2i_intersection_14867", "v2i_intersection_17342", "tf_17342"))
 
-    nodes.append(static_tf(-243.188, 111.707, 0, 0, 0, 0,
+    # Updated using new SDSM centers of Douglas / 17342 and Houston / 24187
+    nodes.append(static_tf(-242.696, 114.270, 0, 0, 0, 0,
                            "v2i_intersection_17342", "v2i_intersection_24187", "tf_24187"))
 
-    nodes.append(static_tf(-124.266, 52.823, 0, 0, 0, 0,
+    # Updated because parent Houston / 24187 center changed
+    nodes.append(static_tf(-121.484, 55.482, 0, 0, 0, 0,
                            "v2i_intersection_24187", "v2i_intersection_12753", "tf_12753"))
 
     nodes.append(static_tf(-127.057, 55.681, 0, 0, 0, 0,

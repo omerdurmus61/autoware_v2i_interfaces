@@ -10,6 +10,8 @@ sdsm_to_autoware_objects:
       - "350457770,-853082840:v2i_intersection_19846"
       - "350457710,-853094200:v2i_intersection_22762"
       - "350460760,-853126630:v2i_intersection_52349"
+      - "350437450,-853028950:v2i_intersection_17342"
+      - "350447750,-853055550:v2i_intersection_24187"
 
     position_scale_x: 0.1
     position_scale_y: 0.1
