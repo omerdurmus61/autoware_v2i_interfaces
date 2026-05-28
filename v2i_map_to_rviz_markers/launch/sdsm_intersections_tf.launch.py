@@ -23,7 +23,7 @@ def static_tf(x, y, z, roll, pitch, yaw, parent, child, name):
 def generate_launch_description():
     nodes = []
 
-    nodes.append(static_tf(-44.389, 8.603, 0, 0, 0, 0,
+    nodes.append(static_tf(-44.389, 8.603, -1.648, 0, 0, 0,
                            "map", "v2i_intersection_14867", "tf_14867"))
 
     nodes.append(static_tf(237.329, -108.967, 0, 0, 0, 0,
@@ -33,15 +33,15 @@ def generate_launch_description():
                            "v2i_intersection_40386", "v2i_intersection_27482", "tf_27482"))
 
     # Updated using new SDSM center of Douglas / 17342
-    nodes.append(static_tf(-372.379, 159.911, 0, 0, 0, 0,
+    nodes.append(static_tf(-372.379, 159.911, -5.146, 0, 0, 0,
                            "v2i_intersection_14867", "v2i_intersection_17342", "tf_17342"))
 
     # Updated using new SDSM centers of Douglas / 17342 and Houston / 24187
-    nodes.append(static_tf(-242.696, 114.270, 0, 0, 0, 0,
+    nodes.append(static_tf(-242.696, 114.270, -6.519, 0, 0, 0,
                            "v2i_intersection_17342", "v2i_intersection_24187", "tf_24187"))
 
     # Updated because parent Houston / 24187 center changed
-    nodes.append(static_tf(-124.166, 52.419, 0, 0, 0, 0,
+    nodes.append(static_tf(-124.166, 52.419, -4.85, 0, 0, 0,
                             "v2i_intersection_24187", "v2i_intersection_12753", "tf_12753"))
 
     nodes.append(static_tf(-127.057, 55.681, 0, 0, 0, 0,
