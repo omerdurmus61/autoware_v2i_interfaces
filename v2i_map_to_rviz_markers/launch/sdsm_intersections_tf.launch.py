@@ -41,8 +41,8 @@ def generate_launch_description():
                            "v2i_intersection_17342", "v2i_intersection_24187", "tf_24187"))
 
     # Updated because parent Houston / 24187 center changed
-    nodes.append(static_tf(-121.484, 55.482, 0, 0, 0, 0,
-                           "v2i_intersection_24187", "v2i_intersection_12753", "tf_12753"))
+    nodes.append(static_tf(-124.166, 52.419, 0, 0, 0, 0,
+                            "v2i_intersection_24187", "v2i_intersection_12753", "tf_12753"))
 
     nodes.append(static_tf(-127.057, 55.681, 0, 0, 0, 0,
                            "v2i_intersection_12753", "v2i_intersection_19846", "tf_19846"))
