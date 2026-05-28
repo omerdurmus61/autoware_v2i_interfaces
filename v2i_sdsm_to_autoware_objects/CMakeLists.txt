@@ -12,6 +12,7 @@ find_package(rclpy REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(autoware_perception_msgs REQUIRED)
 find_package(v2i_sdsm_msgs REQUIRED)
 
@@ -31,6 +32,12 @@ endif()
 install(PROGRAMS
   scripts/sdsm_to_autoware_objects.py
   DESTINATION lib/${PROJECT_NAME}
+)
+
+install(PROGRAMS
+  scripts/sdsm_grouped_map_projection_node.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME sdsm_grouped_map_projection_node
 )
 
 install(DIRECTORY
