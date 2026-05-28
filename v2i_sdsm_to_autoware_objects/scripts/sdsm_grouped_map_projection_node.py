@@ -28,8 +28,7 @@ from v2i_sdsm_msgs.msg import SDSM, SDSMDetectedObject
 @dataclass
 class CachedSdsmObject:
     intersection_key: str
-    source_frame: str
-    sdsm_object: SDSMDetectedObject
+    detected_object: DetectedObject
     last_update_ns: int
 
 
@@ -127,6 +126,7 @@ class SdsmGroupedMapProjectionNode(Node):
 
         self.intersection_frame_map = self._load_intersection_frame_map()
         self.object_cache: Dict[Tuple[str, object], CachedSdsmObject] = {}
+        self.transform_cache: Dict[str, TransformStamped] = {}
         self._last_throttle_times: Dict[str, int] = {}
 
         qos_in = QoSProfile(
@@ -272,12 +272,18 @@ class SdsmGroupedMapProjectionNode(Node):
         self,
         source_frame: str,
     ) -> Optional[TransformStamped]:
+        cached_transform = self.transform_cache.get(source_frame)
+        if cached_transform is not None:
+            return cached_transform
+
         try:
-            return self.tf_buffer.lookup_transform(
+            transform = self.tf_buffer.lookup_transform(
                 self.target_frame,
                 source_frame,
                 Time(),
             )
+            self.transform_cache[source_frame] = transform
+            return transform
         except TransformException as exc:
             self._warn_throttled(
                 f"tf_lookup:{source_frame}",
@@ -473,14 +479,22 @@ class SdsmGroupedMapProjectionNode(Node):
     def _update_object_cache(self, msg: SDSM, source_frame: str) -> None:
         now_ns = self.get_clock().now().nanoseconds
         intersection_key = self._get_intersection_key_from_msg(msg)
+        transform = self._lookup_source_to_target_transform(source_frame)
+        if transform is None:
+            return
 
         for obj in msg.objects:
             local_x, local_y = self._convert_position(obj.position.offset_x, obj.position.offset_y)
             cache_key = self._make_cache_key(intersection_key, obj, local_x, local_y)
+            detected_object = self._build_detected_object(
+                intersection_key,
+                cache_key,
+                obj,
+                transform,
+            )
             self.object_cache[cache_key] = CachedSdsmObject(
                 intersection_key=intersection_key,
-                source_frame=source_frame,
-                sdsm_object=obj,
+                detected_object=detected_object,
                 last_update_ns=now_ns,
             )
 
@@ -513,24 +527,8 @@ class SdsmGroupedMapProjectionNode(Node):
             self.target_frame,
         )
 
-        objects_by_frame: Dict[str, List[Tuple[Tuple[str, object], CachedSdsmObject]]] = {}
-        for cache_key, cached in self.object_cache.items():
-            objects_by_frame.setdefault(cached.source_frame, []).append((cache_key, cached))
-
-        for source_frame, grouped_entries in objects_by_frame.items():
-            transform = self._lookup_source_to_target_transform(source_frame)
-            if transform is None:
-                continue
-
-            for cache_key, cached in grouped_entries:
-                output_msg.objects.append(
-                    self._build_detected_object(
-                        cached.intersection_key,
-                        cache_key,
-                        cached.sdsm_object,
-                        transform,
-                    )
-                )
+        for cached in self.object_cache.values():
+            output_msg.objects.append(cached.detected_object)
 
         self.objects_pub.publish(output_msg)
 

@@ -20,7 +20,7 @@ sdsm_grouped_map_projection_node:
     vehicle_width_scale: 0.01
     vru_radius_scale: 0.01
     use_sphere_visualization: true
-    sphere_radius_m: 2.5
+    sphere_radius_m: 1.4
 
     default_vehicle_height: 1.6
     default_pedestrian_height: 1.8
