@@ -6,6 +6,23 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+
+add_executable(camera_info_frame_republisher_node
+  src/camera_info_frame_republisher.cpp
+)
+
+ament_target_dependencies(camera_info_frame_republisher_node
+  rclcpp
+  sensor_msgs
+)
+
+install(TARGETS
+  camera_info_frame_republisher_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 install(PROGRAMS
   scripts/traffic_light_roi_cropper_node.py
   DESTINATION lib/${PROJECT_NAME}
