@@ -12,7 +12,13 @@ setup(
         ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
         (f"share/{package_name}", ["package.xml"]),
         (f"share/{package_name}/config", ["config/intersections.yaml"]),
-        (f"share/{package_name}/launch", ["launch/v2i_spat_visualizer.launch.py"]),
+        (
+            f"share/{package_name}/launch",
+            [
+                "launch/v2i_spat_visualizer.launch.py",
+                "launch/v2i_network_spat_visualizer.launch.py",
+            ],
+        ),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -24,6 +30,7 @@ setup(
     entry_points={
         "console_scripts": [
             "spat_visualizer = v2i_spat_visualizer.spat_visualizer:main",
+            "v2i_network_spat_visualizer = v2i_spat_visualizer.v2i_network_spat_visualizer:main",
         ],
     },
 )

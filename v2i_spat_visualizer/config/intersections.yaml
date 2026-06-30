@@ -1,4 +1,4 @@
-input_topic: /v2i/spat/raw
+Nice to input_topic: /v2i/spat/raw
 refresh_rate_hz: 10.0
 stale_timeout_sec: 1.5
 window_title: V2I SPaT Visualizer
