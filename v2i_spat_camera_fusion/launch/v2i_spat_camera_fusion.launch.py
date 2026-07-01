@@ -14,6 +14,10 @@ from launch_ros.actions import Node
 AUTOWARE_TRAFFIC_SIGNALS_TOPIC = (
     "/perception/traffic_light_recognition/traffic_signals"
 )
+CAMERA_TRAFFIC_SIGNALS_TOPIC = (
+    "/traffic_light_hsv_roi_classifier/output/traffic_signals"
+)
+SPAT_TRAFFIC_SIGNALS_TOPIC = "/v2i/spat/traffic_signals"
 
 
 def _method_equals(method: LaunchConfiguration, expected: str) -> IfCondition:
@@ -128,12 +132,79 @@ def generate_launch_description():
     hybrid_group = GroupAction(
         condition=_method_equals(method, "hybrid"),
         actions=[
-            # TODO: Add the real camera + V2I fusion node here once it is available.
-            LogInfo(
-                msg=(
-                    "Hybrid method is not implemented yet. "
-                    "Fusion node will be added later."
-                )
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(v2i_spat_bridge_launch)
+            ),
+            Node(
+                package="v2i_traffic_light_status_publisher",
+                executable="v2i_traffic_light_status_publisher.py",
+                name="v2i_traffic_light_status_publisher",
+                output="screen",
+                parameters=[
+                    v2i_tl_status_config,
+                    {"output_topic": SPAT_TRAFFIC_SIGNALS_TOPIC},
+                ],
+            ),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(camera_info_republisher_launch)
+            ),
+            Node(
+                package="tf2_ros",
+                executable="static_transform_publisher",
+                name="cam2_link_to_calib_tf",
+                arguments=[
+                    "0.15",
+                    "-0.038",
+                    "0.072",
+                    "0.06",
+                    "-0.14",
+                    "0",
+                    "vimbax_camera_DEV_000F315E05DE_link",
+                    "cam2_calib_link",
+                ],
+                output="screen",
+            ),
+            Node(
+                package="tf2_ros",
+                executable="static_transform_publisher",
+                name="cam2_calib_to_optical_tf",
+                arguments=[
+                    "0",
+                    "0",
+                    "0",
+                    "-1.57079632679",
+                    "0",
+                    "-1.57079632679",
+                    "cam2_calib_link",
+                    "cam2_calib_optical_link",
+                ],
+                output="screen",
+            ),
+            IncludeLaunchDescription(
+                AnyLaunchDescriptionSource(map_based_detector_launch),
+                launch_arguments={
+                    "input/camera_info": "/sensing/cam2/camera_info_optical",
+                    "use_sim_time": "true",
+                }.items(),
+            ),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(hsv_classifier_launch),
+                launch_arguments={
+                    "output_signals_topic": CAMERA_TRAFFIC_SIGNALS_TOPIC,
+                }.items(),
+            ),
+            Node(
+                package="v2i_spat_camera_fusion",
+                executable="v2x_spat_fusion_node",
+                name="v2x_spat_fusion_node",
+                output="screen",
+                parameters=[
+                    {
+                        "camera_input_topic": CAMERA_TRAFFIC_SIGNALS_TOPIC,
+                        "spat_input_topic": SPAT_TRAFFIC_SIGNALS_TOPIC,
+                        "output_topic": AUTOWARE_TRAFFIC_SIGNALS_TOPIC,
+                    }
+                ],
             ),
         ],
     )

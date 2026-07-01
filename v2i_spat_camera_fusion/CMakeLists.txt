@@ -41,6 +41,12 @@ install(PROGRAMS
   RENAME traffic_light_hsv_param_generator_node
 )
 
+install(PROGRAMS
+  scripts/v2x_spat_fusion_node.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME v2x_spat_fusion_node
+)
+
 install(DIRECTORY
   launch
   config
