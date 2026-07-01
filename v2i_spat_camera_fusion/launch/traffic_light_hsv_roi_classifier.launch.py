@@ -46,7 +46,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "output_signals_topic",
-                default_value="/traffic_light_classifier/output/traffic_signals",
+                default_value="/traffic_light_hsv_roi_classifier/output/traffic_signals",
                 description="TrafficLightArray output topic.",
             ),
             DeclareLaunchArgument(

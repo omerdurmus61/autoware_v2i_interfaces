@@ -10,12 +10,12 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
-from tier4_perception_msgs.msg import (
-    TrafficLight,
-    TrafficLightArray,
+from autoware_perception_msgs.msg import (
+    TrafficLightGroup,
+    TrafficLightGroupArray,
     TrafficLightElement,
-    TrafficLightRoiArray,
 )
+from tier4_perception_msgs.msg import TrafficLightRoiArray
 import yaml
 
 
@@ -153,7 +153,7 @@ class TrafficLightHsvRoiClassifierNode(Node):
             ),
         )
         self.traffic_signal_publisher = self.create_publisher(
-            TrafficLightArray,
+            TrafficLightGroupArray,
             self.output_signals_topic,
             QoSProfile(
                 depth=10,
@@ -200,8 +200,8 @@ class TrafficLightHsvRoiClassifierNode(Node):
 
         image_height, image_width = cv_image.shape[:2]
         debug_image = cv_image.copy()
-        output_signals = TrafficLightArray()
-        output_signals.header = image_msg.header
+        output_signals = TrafficLightGroupArray()
+        output_signals.stamp = image_msg.header.stamp
 
         for traffic_light_roi in roi_array_msg.rois:
             roi = traffic_light_roi.roi
@@ -226,10 +226,9 @@ class TrafficLightHsvRoiClassifierNode(Node):
             mapped_traffic_light_id = self._map_traffic_light_id(
                 int(traffic_light_roi.traffic_light_id)
             )
-            output_signals.signals.append(
-                self._build_traffic_signal(
-                    traffic_light_id=mapped_traffic_light_id,
-                    traffic_light_type=int(traffic_light_roi.traffic_light_type),
+            output_signals.traffic_light_groups.append(
+                self._build_traffic_light_group(
+                    traffic_light_group_id=mapped_traffic_light_id,
                     label=label,
                     green_score=green_score,
                     red_score=red_score,
@@ -487,17 +486,15 @@ class TrafficLightHsvRoiClassifierNode(Node):
             cv2.LINE_AA,
         )
 
-    def _build_traffic_signal(
+    def _build_traffic_light_group(
         self,
-        traffic_light_id: int,
-        traffic_light_type: int,
+        traffic_light_group_id: int,
         label: str,
         green_score: float,
         red_score: float,
-    ) -> TrafficLight:
-        signal = TrafficLight()
-        signal.traffic_light_id = traffic_light_id
-        signal.traffic_light_type = traffic_light_type
+    ) -> TrafficLightGroup:
+        signal = TrafficLightGroup()
+        signal.traffic_light_group_id = traffic_light_group_id
 
         element = TrafficLightElement()
         element.shape = TrafficLightElement.CIRCLE
