@@ -9,6 +9,7 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource, PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
+from launch_ros.actions import SetParameter
 
 
 AUTOWARE_TRAFFIC_SIGNALS_TOPIC = (
@@ -26,6 +27,8 @@ def _method_equals(method: LaunchConfiguration, expected: str) -> IfCondition:
 
 def generate_launch_description():
     method = LaunchConfiguration("method")
+    use_sim_time = LaunchConfiguration("use_sim_time")
+    obu_bridge_node = LaunchConfiguration("obu_bridge_node")
 
     v2i_spat_bridge_launch = os.path.join(
         get_package_share_directory("v2i_spat_bridge"),
@@ -59,8 +62,10 @@ def generate_launch_description():
     v2i_group = GroupAction(
         condition=_method_equals(method, "v2i"),
         actions=[
+            SetParameter(name="use_sim_time", value=use_sim_time),
             IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(v2i_spat_bridge_launch)
+                PythonLaunchDescriptionSource(v2i_spat_bridge_launch),
+                condition=IfCondition(obu_bridge_node),
             ),
             Node(
                 package="v2i_traffic_light_status_publisher",
@@ -78,6 +83,7 @@ def generate_launch_description():
     camera_group = GroupAction(
         condition=_method_equals(method, "camera"),
         actions=[
+            SetParameter(name="use_sim_time", value=use_sim_time),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(camera_info_republisher_launch)
             ),
@@ -117,7 +123,7 @@ def generate_launch_description():
                 AnyLaunchDescriptionSource(map_based_detector_launch),
                 launch_arguments={
                     "input/camera_info": "/sensing/cam2/camera_info_optical",
-                    "use_sim_time": "true",
+                    "use_sim_time": use_sim_time,
                 }.items(),
             ),
             IncludeLaunchDescription(
@@ -132,8 +138,10 @@ def generate_launch_description():
     hybrid_group = GroupAction(
         condition=_method_equals(method, "hybrid"),
         actions=[
+            SetParameter(name="use_sim_time", value=use_sim_time),
             IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(v2i_spat_bridge_launch)
+                PythonLaunchDescriptionSource(v2i_spat_bridge_launch),
+                condition=IfCondition(obu_bridge_node),
             ),
             Node(
                 package="v2i_traffic_light_status_publisher",
@@ -184,7 +192,7 @@ def generate_launch_description():
                 AnyLaunchDescriptionSource(map_based_detector_launch),
                 launch_arguments={
                     "input/camera_info": "/sensing/cam2/camera_info_optical",
-                    "use_sim_time": "true",
+                    "use_sim_time": use_sim_time,
                 }.items(),
             ),
             IncludeLaunchDescription(
@@ -235,6 +243,16 @@ def generate_launch_description():
                 "method",
                 default_value="v2i",
                 description="Traffic light recognition source: v2i, camera, or hybrid.",
+            ),
+            DeclareLaunchArgument(
+                "use_sim_time",
+                default_value="false",
+                description="Use ROS simulation time from /clock for all relevant nodes.",
+            ),
+            DeclareLaunchArgument(
+                "obu_bridge_node",
+                default_value="true",
+                description="Launch the v2i_spat_bridge OBU bridge node.",
             ),
             v2i_group,
             camera_group,

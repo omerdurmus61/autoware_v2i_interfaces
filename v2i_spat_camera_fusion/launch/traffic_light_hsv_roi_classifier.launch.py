@@ -15,6 +15,7 @@ def generate_launch_description():
     traffic_light_id_map_path = LaunchConfiguration("traffic_light_id_map_path")
     min_roi_width = LaunchConfiguration("min_roi_width")
     min_roi_height = LaunchConfiguration("min_roi_height")
+    publish_rate_hz = LaunchConfiguration("publish_rate_hz")
 
     return LaunchDescription(
         [
@@ -70,6 +71,11 @@ def generate_launch_description():
                 default_value="1",
                 description="Minimum clamped ROI height in pixels.",
             ),
+            DeclareLaunchArgument(
+                "publish_rate_hz",
+                default_value="10.0",
+                description="Fixed publish rate for cached traffic light outputs.",
+            ),
             Node(
                 package="v2i_spat_camera_fusion",
                 executable="traffic_light_hsv_roi_classifier_node",
@@ -85,6 +91,7 @@ def generate_launch_description():
                         "traffic_light_id_map_path": traffic_light_id_map_path,
                         "min_roi_width": min_roi_width,
                         "min_roi_height": min_roi_height,
+                        "publish_rate_hz": publish_rate_hz,
                     }
                 ],
             ),

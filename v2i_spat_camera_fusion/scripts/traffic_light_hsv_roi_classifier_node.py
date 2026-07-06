@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from copy import deepcopy
 import cv2
 from cv_bridge import CvBridge, CvBridgeError
 from message_filters import ApproximateTimeSynchronizer, Subscriber
@@ -7,7 +8,7 @@ import numpy as np
 from pathlib import Path
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
 from autoware_perception_msgs.msg import (
@@ -36,6 +37,7 @@ class TrafficLightHsvRoiClassifierNode(Node):
         self.declare_parameter("traffic_light_id_map_path", "")
         self.declare_parameter("min_roi_width", 1)
         self.declare_parameter("min_roi_height", 1)
+        self.declare_parameter("publish_rate_hz", 10.0)
         self.declare_parameter("sync_queue_size", 20)
         self.declare_parameter("sync_slop_seconds", 0.2)
         self.declare_parameter("saturation_threshold", 60)
@@ -79,6 +81,7 @@ class TrafficLightHsvRoiClassifierNode(Node):
         ).expanduser()
         self.min_roi_width = max(1, int(self.get_parameter("min_roi_width").value))
         self.min_roi_height = max(1, int(self.get_parameter("min_roi_height").value))
+        self.publish_rate_hz = float(self.get_parameter("publish_rate_hz").value)
         sync_queue_size = max(1, int(self.get_parameter("sync_queue_size").value))
         sync_slop_seconds = float(self.get_parameter("sync_slop_seconds").value)
         self.saturation_threshold = int(
@@ -141,8 +144,15 @@ class TrafficLightHsvRoiClassifierNode(Node):
             self.get_parameter("opposite_score_ceiling").value
         )
 
+        if self.publish_rate_hz <= 0.0:
+            self.get_logger().warn(
+                "publish_rate_hz <= 0.0 is invalid. Falling back to 10.0 Hz."
+            )
+            self.publish_rate_hz = 10.0
+
         self.bridge = CvBridge()
         self.traffic_light_id_map = self._load_traffic_light_id_map()
+        self.cached_output_signals = TrafficLightGroupArray()
         self.debug_publisher = self.create_publisher(
             Image,
             self.output_image_topic,
@@ -156,10 +166,15 @@ class TrafficLightHsvRoiClassifierNode(Node):
             TrafficLightGroupArray,
             self.output_signals_topic,
             QoSProfile(
-                depth=10,
                 reliability=ReliabilityPolicy.RELIABLE,
+                history=HistoryPolicy.KEEP_LAST,
+                depth=1,
                 durability=DurabilityPolicy.VOLATILE,
             ),
+        )
+        self.publish_timer = self.create_timer(
+            1.0 / self.publish_rate_hz,
+            self.publish_cached_signals,
         )
 
         self.image_sub = Subscriber(
@@ -185,9 +200,18 @@ class TrafficLightHsvRoiClassifierNode(Node):
         self.get_logger().info(f"roi_topic: {self.roi_topic}")
         self.get_logger().info(f"output_image_topic: {self.output_image_topic}")
         self.get_logger().info(f"output_signals_topic: {self.output_signals_topic}")
+        self.get_logger().info(f"publish_rate_hz: {self.publish_rate_hz:.2f} Hz")
         self.get_logger().info(
             f"loaded {len(self.traffic_light_id_map)} traffic light ID mappings"
         )
+
+    def publish_cached_signals(self) -> None:
+        output_signals = TrafficLightGroupArray()
+        output_signals.stamp = self.get_clock().now().to_msg()
+        output_signals.traffic_light_groups = deepcopy(
+            self.cached_output_signals.traffic_light_groups
+        )
+        self.traffic_signal_publisher.publish(output_signals)
 
     def synced_callback(
         self, image_msg: Image, roi_array_msg: TrafficLightRoiArray
@@ -251,14 +275,14 @@ class TrafficLightHsvRoiClassifierNode(Node):
                 thickness=2,
             )
 
+        self.cached_output_signals = output_signals
+
         try:
             debug_msg = self.bridge.cv2_to_imgmsg(debug_image, encoding="bgr8")
             debug_msg.header = image_msg.header
             self.debug_publisher.publish(debug_msg)
         except CvBridgeError as error:
             self.get_logger().error(f"Failed to publish debug image: {error}")
-
-        self.traffic_signal_publisher.publish(output_signals)
 
     def build_pre_filter_mask(self, hsv: np.ndarray) -> np.ndarray:
         s_channel, v_channel = hsv[:, :, 1], hsv[:, :, 2]
