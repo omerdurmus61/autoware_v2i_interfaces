@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "rclcpp/rclcpp.hpp"
 #include "raptor_dbw_msgs/msg/driver_input_report.hpp"
@@ -24,7 +25,7 @@ private:
   std::string driver_input_topic_;
   std::string virtual_traffic_light_state_topic_;
   std::string virtual_traffic_light_type_;
-  std::string virtual_traffic_light_id_;
+  std::vector<std::string> virtual_traffic_light_ids_;
   double approval_duration_sec_;
   double publish_rate_hz_;
   bool is_finalized_;
