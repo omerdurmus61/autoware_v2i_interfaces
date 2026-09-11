@@ -1,0 +1,8 @@
+<library path="v2i_spat_rviz_panel">
+  <class
+    name="v2i_spat_rviz_panel/SpatPanel"
+    type="v2i_spat_rviz_panel::SpatPanel"
+    base_class_type="rviz_common::Panel">
+    <description>Displays configured V2I SPaT signal groups and their remaining times.</description>
+  </class>
+</library>
