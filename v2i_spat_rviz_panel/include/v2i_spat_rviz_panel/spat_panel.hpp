@@ -60,7 +60,7 @@ private:
   static QString eventStateName(int event_state);
   static QString eventStateColor(int event_state);
 
-  std::string topic_{"/v2i/spat/raw"};
+  std::string topic_{"/v2i/network/spat/raw"};
   std::shared_ptr<rclcpp::Node> node_;
   rclcpp::Subscription<v2i_spat_msgs::msg::SpatPacket>::SharedPtr subscription_;
   QTimer * update_timer_{nullptr};
