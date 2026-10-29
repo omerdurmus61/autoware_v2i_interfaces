@@ -14,6 +14,7 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from std_msgs.msg import String
+from v2i_spat_fusion_debug_msgs.msg import FusionDiagnostics, FusionGroupDiagnostics
 
 
 class V2XSpatFusionNode(Node):
@@ -32,6 +33,10 @@ class V2XSpatFusionNode(Node):
         self.declare_parameter(
             "debug_source_topic",
             "/v2i_spat_camera_fusion/debug/fusion_source",
+        )
+        self.declare_parameter(
+            "debug_diagnostics_topic",
+            "/v2i_spat_camera_fusion/debug/fusion_diagnostics",
         )
         self.declare_parameter("publish_rate_hz", 10.0)
         self.declare_parameter("camera_max_latency", 0.5)
@@ -106,6 +111,13 @@ class V2XSpatFusionNode(Node):
             debug_source_topic,
             qos_output,
         )
+        self.diagnostics_pub = self.create_publisher(
+            FusionDiagnostics,
+            str(self.get_parameter("debug_diagnostics_topic").value),
+            qos_output,
+        )
+        self._debug_groups = []
+        self._debug_cycle_id = 0
         self.publish_timer = self.create_timer(
             1.0 / publish_rate_hz,
             self.publish_fused_output,
@@ -136,12 +148,14 @@ class V2XSpatFusionNode(Node):
     def publish_fused_output(self) -> None:
         output_msg = TrafficLightGroupArray()
         output_msg.stamp = self.get_clock().now().to_msg()
+        self._debug_groups = []
         fused_groups = self._fuse_groups()
         output_msg.traffic_light_groups = fused_groups
         self.output_pub.publish(output_msg)
         debug_msg = String()
         debug_msg.data = self._debug_source_label()
         self.debug_source_pub.publish(debug_msg)
+        self._publish_diagnostics(output_msg.stamp)
 
     def _fuse_groups(self) -> list[TrafficLightGroup]:
         camera_groups = self._group_map(self.latest_camera_msg)
@@ -216,7 +230,79 @@ class V2XSpatFusionNode(Node):
         if selected_state == "UNKNOWN":
             confidence = 0.0
 
+        # Observe the existing decision without recomputing or changing its values.
+        debug = FusionGroupDiagnostics()
+        debug.traffic_light_group_id = int(group_id)
+        debug.camera_present = camera_group is not None
+        debug.spat_present = v2x_group is not None
+        debug.camera_state = camera_state
+        debug.spat_state = v2x_state
+        debug.camera_confidence = float(camera_confidence)
+        debug.camera_freshness = float(camera_freshness)
+        debug.spat_freshness = float(v2x_freshness)
+        debug.camera_update_rate_score = float(camera_update_rate_score)
+        debug.spat_update_rate_score = float(v2x_update_rate_score)
+        debug.id_match_score = float(id_match_score)
+        debug.camera_reliability = float(camera_reliability)
+        debug.spat_reliability = float(v2x_reliability)
+        debug.camera_reliable = camera_reliable
+        debug.spat_reliable = v2x_reliable
+        debug.spat_fresh = v2x_fresh
+        debug.selected_source = selected_source
+        debug.selected_state = selected_state
+        debug.decision_reason = {
+            "v2i": FusionGroupDiagnostics.REASON_SPAT_ACCEPTED,
+            "camera": FusionGroupDiagnostics.REASON_CAMERA_FALLBACK,
+            "unknown": FusionGroupDiagnostics.REASON_NO_USABLE_SOURCE,
+        }[selected_source]
+        debug.output_confidence = float(confidence)
+        debug.comparison_valid = (
+            camera_group is not None and v2x_group is not None
+            and camera_state != "UNKNOWN" and v2x_state != "UNKNOWN"
+        )
+        debug.camera_spat_disagree = (
+            debug.comparison_valid and camera_state != v2x_state
+        )
+        self._debug_groups.append(debug)
+
         return self._build_group(group_id, selected_state, confidence), selected_source
+
+    def _publish_diagnostics(self, output_stamp) -> None:
+        debug = FusionDiagnostics()
+        debug.stamp = output_stamp
+        debug.cycle_id = self._debug_cycle_id
+        self._debug_cycle_id += 1
+        now = self.get_clock().now()
+        debug.sampled_at = now.to_msg()
+        now_seconds = now.nanoseconds / 1e9
+        for prefix, msg, history in (
+            ("camera", self.latest_camera_msg, self.camera_arrival_history),
+            ("spat", self.latest_spat_msg, self.v2x_arrival_history),
+        ):
+            setattr(debug, prefix + "_received", msg is not None)
+            stamp_ns = (
+                self._stamp_nanoseconds(msg.stamp) if msg is not None else None
+            )
+            if msg is not None:
+                setattr(debug, prefix + "_stamp", msg.stamp)
+            setattr(debug, prefix + "_stamp_valid", stamp_ns is not None)
+            age = (
+                max(0.0, (now.nanoseconds - stamp_ns) / 1e9)
+                if stamp_ns is not None else -1.0
+            )
+            setattr(debug, prefix + "_message_age", age)
+            since_arrival = max(0.0, now_seconds - history[-1]) if history else -1.0
+            setattr(debug, prefix + "_time_since_arrival", since_arrival)
+            setattr(debug, prefix + "_update_rate_hz", self._update_rate_hz(history))
+            setattr(debug, prefix + "_history_samples", len(history))
+        debug.camera_max_latency = self.camera_max_latency
+        debug.spat_max_latency = self.v2x_max_latency
+        debug.camera_expected_rate = self.camera_expected_rate
+        debug.spat_expected_rate = self.v2x_expected_rate
+        debug.camera_reliability_threshold = self.camera_reliability_threshold
+        debug.spat_reliability_threshold = self.v2x_reliability_threshold
+        debug.groups = self._debug_groups
+        self.diagnostics_pub.publish(debug)
 
     def _group_map(
         self, msg: Optional[TrafficLightGroupArray]

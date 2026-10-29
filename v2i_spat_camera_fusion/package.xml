@@ -12,9 +12,11 @@
   <depend>message_filters</depend>
   <depend>rclcpp</depend>
   <depend>rclpy</depend>
+  <depend>rcl_interfaces</depend>
   <depend>cv_bridge</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
+  <exec_depend>v2i_spat_fusion_debug_msgs</exec_depend>
   <depend>autoware_perception_msgs</depend>
   <depend>tier4_perception_msgs</depend>
 
@@ -22,6 +24,7 @@
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
 
+  <test_depend>ament_cmake_pytest</test_depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 

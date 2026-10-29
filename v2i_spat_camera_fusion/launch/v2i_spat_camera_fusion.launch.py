@@ -2,6 +2,8 @@
 
 import os
 
+import yaml
+
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, LogInfo
@@ -25,10 +27,23 @@ def _method_equals(method: LaunchConfiguration, expected: str) -> IfCondition:
     return IfCondition(PythonExpression(["'", method, "' == '", expected, "'"]))
 
 
+def _status_publisher_parameters(config_path, output_topic):
+    # Merge before passing parameters to ROS: avoid competing node-specific
+    # YAML and wildcard launch overrides for the same output_topic.
+    with open(config_path, encoding="utf-8") as config_file:
+        config = yaml.safe_load(config_file)
+    parameters = dict(
+        config["v2i_traffic_light_status_publisher"]["ros__parameters"]
+    )
+    parameters["output_topic"] = output_topic
+    return parameters
+
+
 def generate_launch_description():
     method = LaunchConfiguration("method")
     use_sim_time = LaunchConfiguration("use_sim_time")
     obu_bridge_node = LaunchConfiguration("obu_bridge_node")
+    fusion_spat_input_topic = LaunchConfiguration("fusion_spat_input_topic")
 
     v2i_spat_bridge_launch = os.path.join(
         get_package_share_directory("v2i_spat_bridge"),
@@ -73,8 +88,9 @@ def generate_launch_description():
                 name="v2i_traffic_light_status_publisher",
                 output="screen",
                 parameters=[
-                    v2i_tl_status_config,
-                    {"output_topic": AUTOWARE_TRAFFIC_SIGNALS_TOPIC},
+                    _status_publisher_parameters(
+                        v2i_tl_status_config, AUTOWARE_TRAFFIC_SIGNALS_TOPIC
+                    ),
                 ],
             ),
         ],
@@ -149,8 +165,9 @@ def generate_launch_description():
                 name="v2i_traffic_light_status_publisher",
                 output="screen",
                 parameters=[
-                    v2i_tl_status_config,
-                    {"output_topic": SPAT_TRAFFIC_SIGNALS_TOPIC},
+                    _status_publisher_parameters(
+                        v2i_tl_status_config, SPAT_TRAFFIC_SIGNALS_TOPIC
+                    ),
                 ],
             ),
             IncludeLaunchDescription(
@@ -209,7 +226,7 @@ def generate_launch_description():
                 parameters=[
                     {
                         "camera_input_topic": CAMERA_TRAFFIC_SIGNALS_TOPIC,
-                        "spat_input_topic": SPAT_TRAFFIC_SIGNALS_TOPIC,
+                        "spat_input_topic": fusion_spat_input_topic,
                         "output_topic": AUTOWARE_TRAFFIC_SIGNALS_TOPIC,
                     }
                 ],
@@ -253,6 +270,11 @@ def generate_launch_description():
                 "obu_bridge_node",
                 default_value="true",
                 description="Launch the v2i_spat_bridge OBU bridge node.",
+            ),
+            DeclareLaunchArgument(
+                "fusion_spat_input_topic",
+                default_value=SPAT_TRAFFIC_SIGNALS_TOPIC,
+                description="SPaT input topic for hybrid fusion.",
             ),
             v2i_group,
             camera_group,

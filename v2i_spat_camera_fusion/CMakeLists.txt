@@ -47,6 +47,12 @@ install(PROGRAMS
   RENAME v2x_spat_fusion_node
 )
 
+install(PROGRAMS
+  scripts/spat_delay_node.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME spat_delay_node
+)
+
 install(DIRECTORY
   launch
   config
@@ -64,6 +70,11 @@ install(FILES
 )
 
 if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_spat_delay test/test_spat_delay.py)
+  ament_add_pytest_test(test_spat_launch_parameters test/test_spat_launch_parameters.py
+    APPEND_ENV ROS_LOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/ros_logs
+  )
   find_package(ament_lint_auto REQUIRED)
   set(ament_cmake_copyright_FOUND TRUE)
   set(ament_cmake_cpplint_FOUND TRUE)
