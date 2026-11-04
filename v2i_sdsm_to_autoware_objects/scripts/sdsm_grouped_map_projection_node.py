@@ -72,7 +72,6 @@ class SdsmGroupedMapProjectionNode(Node):
 
         self.declare_parameter("use_heading", False)
         self.declare_parameter("default_heading", 45.0)
-        self.declare_parameter("heading_scale_rad", 0.0125)
 
         self.declare_parameter("intersection_keys", [""])
 
@@ -122,7 +121,6 @@ class SdsmGroupedMapProjectionNode(Node):
 
         self.use_heading = bool(self.get_parameter("use_heading").value)
         self.default_heading = float(self.get_parameter("default_heading").value)
-        self.heading_scale_rad = float(self.get_parameter("heading_scale_rad").value)
 
         self.intersection_frame_map = self._load_intersection_frame_map()
         self.object_cache: Dict[Tuple[str, object], CachedSdsmObject] = {}
@@ -410,10 +408,12 @@ class SdsmGroupedMapProjectionNode(Node):
         if not self.use_heading:
             return math.radians(self.default_heading), DetectedObjectKinematics.UNAVAILABLE
 
-        if obj.heading == 0:
+        if obj.heading >= 28800:
             return 0.0, DetectedObjectKinematics.UNAVAILABLE
 
-        return float(obj.heading) * self.heading_scale_rad, DetectedObjectKinematics.AVAILABLE
+        # J2735: 0.0125 degrees clockwise from north; ROS ENU: radians CCW from east.
+        yaw = math.radians(90.0 - float(obj.heading) * 0.0125)
+        return yaw, DetectedObjectKinematics.AVAILABLE
 
     def _build_detected_object(
         self,

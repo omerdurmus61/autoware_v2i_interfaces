@@ -219,7 +219,7 @@ Useful params (`config/sdsm_to_autoware_objects.yaml`):
 - `frame_id`
 - `position_scale_x`, `position_scale_y`
 - `swap_xy`, `invert_x`, `invert_y`
-- `use_heading`, `heading_scale_rad`
+- `use_heading`, `default_heading`
 
 ### `v2i_spat_msgs`
 Brief: Custom ROS message definitions for SPaT payloads.

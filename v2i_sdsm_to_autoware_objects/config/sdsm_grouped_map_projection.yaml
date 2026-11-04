@@ -19,7 +19,7 @@ sdsm_grouped_map_projection_node:
     vehicle_length_scale: 0.01
     vehicle_width_scale: 0.01
     vru_radius_scale: 0.01
-    use_sphere_visualization: true
+    use_sphere_visualization: false
     sphere_radius_m: 1.4
 
     default_vehicle_height: 1.6
@@ -34,9 +34,9 @@ sdsm_grouped_map_projection_node:
     pedestrian_existence_probability: 0.95
     unknown_existence_probability: 0.50
 
-    use_heading: false
+    use_heading: true
     default_heading: 45.0
-    heading_scale_rad: 0.0125
+
 
     intersection_keys:
       - "350415343,-852968100:v2i_intersection_40386"
